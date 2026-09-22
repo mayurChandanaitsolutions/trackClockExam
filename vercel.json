@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "installCommand": "npm --prefix ExamDutyManagement/frontend install",
+  "buildCommand": "npm --prefix ExamDutyManagement/frontend run build",
+  "outputDirectory": "ExamDutyManagement/frontend/dist",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
