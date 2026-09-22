@@ -9,8 +9,10 @@ export class DashboardController {
   async getEmployeeDashboard(
     @Query('resourceId') queryResourceId?: string,
     @Headers('x-resource-id') headerResourceId?: string,
+    @Query('year') queryYear?: string,
   ) {
     const resourceId = headerResourceId || queryResourceId || 'ALL';
-    return this.dashboardService.getEmployeeDashboard(resourceId);
+    const parsedYear = queryYear ? parseInt(queryYear, 10) : undefined;
+    return this.dashboardService.getEmployeeDashboard(resourceId, parsedYear);
   }
 }

@@ -58,7 +58,26 @@ export const LoginScreen: React.FC = () => {
       // Connect to backend REST API (POST /api/auth/login) with loginType
       const emp = await authService.login(resourceId.trim(), mobile.trim(), loginRole);
       sessionStorage.setItem('exam_duty_user', JSON.stringify(emp));
-      navigate('/dashboard');
+
+      if (loginRole === 'admin' || emp.isAdmin) {
+        // Admin portal: directly open dashboard
+        navigate('/dashboard');
+      } else {
+        // Employee portal: check verification status directly from backend response!
+        const isVerified = Boolean(
+          emp.isIdentityVerified ||
+          (emp.aadhaarNumber && emp.aadhaarNumber.trim().length >= 10 && emp.panNumber && emp.panNumber.trim().length >= 10) ||
+          localStorage.getItem('identity_verified_' + emp.resourceId) === 'true'
+        );
+
+        if (isVerified) {
+          // Already verified in database: open dashboard directly!
+          navigate('/dashboard');
+        } else {
+          // First time employee: show Aadhaar and PAN verification before starting duty
+          navigate('/verify-identity');
+        }
+      }
     } catch (err: any) {
       const msg = err.response?.data?.message || err.message || 'Login failed';
       setErrors((prev) => ({ ...prev, server: msg }));
@@ -149,9 +168,9 @@ export const LoginScreen: React.FC = () => {
               alignItems: 'center',
               gap: '8px',
               color: '#DC2626',
-              fontSize: '13px'
+              fontSize: '14.5px'
             }}>
-              <AlertCircle size={16} style={{ flexShrink: 0 }} />
+              <AlertCircle size={18} style={{ flexShrink: 0 }} />
               <span>{errors.server}</span>
             </div>
           )}
@@ -181,7 +200,7 @@ export const LoginScreen: React.FC = () => {
               </div>
               {errors.resourceId && (
                 <span className="field-error-msg">
-                  <AlertCircle size={12} />
+                  <AlertCircle size={14} />
                   {errors.resourceId}
                 </span>
               )}
@@ -213,7 +232,7 @@ export const LoginScreen: React.FC = () => {
               </div>
               {errors.mobile && (
                 <span className="field-error-msg">
-                  <AlertCircle size={12} />
+                  <AlertCircle size={14} />
                   {errors.mobile}
                 </span>
               )}
@@ -236,7 +255,7 @@ export const LoginScreen: React.FC = () => {
 
             {/* Quick Staff Selection helper */}
             <div style={{ marginTop: '16px', paddingTop: '14px', borderTop: '1px solid #E2E8F0', textAlign: 'center' }}>
-              <span style={{ fontSize: '11px', color: '#64748B', fontWeight: 600, display: 'block', marginBottom: '8px' }}>
+              <span style={{ fontSize: '13px', color: '#64748B', fontWeight: 600, display: 'block', marginBottom: '8px' }}>
                 {loginRole === 'admin' ? 'TEMPORARY ADMIN CREDENTIAL:' : 'QUICK LOGIN (REGISTERED STAFF):'}
               </span>
               <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', flexWrap: 'wrap' }}>
@@ -252,8 +271,8 @@ export const LoginScreen: React.FC = () => {
                       border: '1px solid #FCD34D',
                       color: '#92400E',
                       borderRadius: '6px',
-                      padding: '4px 10px',
-                      fontSize: '11px',
+                      padding: '5px 12px',
+                      fontSize: '13px',
                       fontWeight: 700,
                       cursor: 'pointer',
                     }}
@@ -273,8 +292,8 @@ export const LoginScreen: React.FC = () => {
                         border: '1px solid #BFDBFE',
                         color: '#1D4ED8',
                         borderRadius: '6px',
-                        padding: '4px 10px',
-                        fontSize: '11px',
+                        padding: '5px 12px',
+                        fontSize: '13px',
                         fontWeight: 600,
                         cursor: 'pointer',
                       }}
@@ -292,8 +311,8 @@ export const LoginScreen: React.FC = () => {
                         border: '1px solid #BFDBFE',
                         color: '#1D4ED8',
                         borderRadius: '6px',
-                        padding: '4px 10px',
-                        fontSize: '11px',
+                        padding: '5px 12px',
+                        fontSize: '13px',
                         fontWeight: 600,
                         cursor: 'pointer',
                       }}

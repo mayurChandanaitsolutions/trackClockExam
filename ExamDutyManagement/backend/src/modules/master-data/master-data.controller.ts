@@ -1,4 +1,4 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Query, Param } from '@nestjs/common';
 import { MasterDataService } from './master-data.service';
 
 @Controller()
@@ -33,5 +33,49 @@ export class MasterDataController {
   @Get('employees')
   async getEmployees() {
     return this.masterDataService.getEmployees();
+  }
+
+  @Get('employees/:resourceId')
+  async getEmployeeByResourceId(@Param('resourceId') resourceId: string) {
+    return this.masterDataService.getEmployeeByResourceId(resourceId);
+  }
+
+  @Post('employees')
+  async createEmployee(
+    @Body()
+    body: {
+      resourceId: string;
+      name: string;
+      mobile: string;
+      email?: string;
+      aadhaarNumber?: string;
+      panNumber?: string;
+      city?: string;
+      isIdentityVerified?: boolean;
+    },
+  ) {
+    return this.masterDataService.createEmployee(body);
+  }
+
+  @Put('employees/:resourceId')
+  async updateEmployee(
+    @Param('resourceId') resourceId: string,
+    @Body()
+    body: {
+      name?: string;
+      mobile?: string;
+      email?: string;
+      aadhaarNumber?: string;
+      panNumber?: string;
+      city?: string;
+      isIdentityVerified?: boolean;
+    },
+  ) {
+    return this.masterDataService.updateEmployee(resourceId, body);
+  }
+
+  @Delete('employees/:resourceId')
+  async deleteEmployee(@Param('resourceId') resourceId: string) {
+    return this.masterDataService.deleteEmployee(resourceId);
   }
 }

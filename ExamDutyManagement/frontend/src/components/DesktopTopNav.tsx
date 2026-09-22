@@ -1,12 +1,15 @@
-import React from 'react';
-import { Shield, Menu, Bell } from 'lucide-react';
+import React, { useState } from 'react';
+import { Shield } from 'lucide-react';
 import { HealthBadge } from './HealthBadge';
 import authService from '../services/auth.service';
+import EmployeeDetailsModal from './EmployeeDetailsModal';
 
 export const DesktopTopNav: React.FC = () => {
   const user = authService.getStoredUser();
   const displayName = user?.name || 'Sanjeev Kumar N';
   const resourceId = user?.resourceId || '17655';
+  const [showDetailsModal, setShowDetailsModal] = useState<boolean>(false);
+
   const initials = displayName
     .split(' ')
     .filter(Boolean)
@@ -25,9 +28,6 @@ export const DesktopTopNav: React.FC = () => {
         <div className="top-nav-brand-text">
           <h1 className="top-brand-title">Exam Duty Management</h1>
         </div>
-        <button className="top-nav-hamburger" title="Toggle Sidebar">
-          <Menu size={20} color="#475569" />
-        </button>
       </div>
 
       {/* Right User & System Meta */}
@@ -35,14 +35,13 @@ export const DesktopTopNav: React.FC = () => {
         {/* Backend Connected Indicator */}
         <HealthBadge />
 
-        {/* Notification Bell */}
-        <div className="top-nav-bell-wrapper" title="Notifications">
-          <Bell size={20} color="#475569" />
-          <span className="bell-red-dot" />
-        </div>
-
-        {/* User Profile Pill */}
-        <div className="top-nav-user-profile">
+        {/* User Profile Pill (Clickable to view personal details) */}
+        <div
+          className="top-nav-user-profile"
+          onClick={() => setShowDetailsModal(true)}
+          title="Click to view & update your personal details (Aadhaar, PAN, etc.)"
+          style={{ cursor: 'pointer', transition: 'all 0.15s ease' }}
+        >
           <div className="user-avatar-circle">
             <span>{initials}</span>
           </div>
@@ -52,8 +51,8 @@ export const DesktopTopNav: React.FC = () => {
               {user?.isAdmin ? (
                 <span
                   style={{
-                    padding: '1px 6px',
-                    fontSize: '10px',
+                    padding: '2px 8px',
+                    fontSize: '12px',
                     fontWeight: 700,
                     borderRadius: '4px',
                     background: '#FEF3C7',
@@ -66,8 +65,8 @@ export const DesktopTopNav: React.FC = () => {
               ) : (
                 <span
                   style={{
-                    padding: '1px 6px',
-                    fontSize: '10px',
+                    padding: '2px 8px',
+                    fontSize: '12px',
                     fontWeight: 700,
                     borderRadius: '4px',
                     background: '#EFF6FF',
@@ -79,10 +78,19 @@ export const DesktopTopNav: React.FC = () => {
                 </span>
               )}
             </div>
-            <span className="user-resource-id">Resource ID: {resourceId}</span>
+            <span className="user-resource-id" style={{ textDecoration: 'underline' }}>
+              Resource ID: {resourceId}
+            </span>
           </div>
         </div>
       </div>
+
+      {/* Employee Personal Details Modal */}
+      <EmployeeDetailsModal
+        resourceId={resourceId}
+        isOpen={showDetailsModal}
+        onClose={() => setShowDetailsModal(false)}
+      />
     </header>
   );
 };

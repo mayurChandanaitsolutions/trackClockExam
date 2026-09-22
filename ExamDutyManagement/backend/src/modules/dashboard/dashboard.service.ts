@@ -54,7 +54,7 @@ export class DashboardService {
     private readonly employeeRepo: Repository<Employee>,
   ) {}
 
-  async getEmployeeDashboard(resourceId: string = 'ALL') {
+  async getEmployeeDashboard(resourceId: string = 'ALL', year?: number) {
     const isAll = !resourceId || resourceId.toUpperCase() === 'ALL' || resourceId === '17655';
     let employee: Employee | null = null;
 
@@ -78,11 +78,30 @@ export class DashboardService {
 
     const now = new Date();
     const currentMonthIndex = now.getMonth(); // 8 for September in 2026
+    const currentYear = now.getFullYear();
 
-    // 2. Compute "This Month" (duties matching current month)
+    // Dynamically calculate available years from database duties
+    const distinctYearsSet = new Set<number>();
+    distinctYearsSet.add(currentYear);
+    duties.forEach((d) => {
+      const info = parseDutyMonth(d.dutyDate, d.createdAt);
+      if (info.year && info.year >= 2000 && info.year <= 2100) {
+        distinctYearsSet.add(info.year);
+      }
+    });
+    // Add standard recent/upcoming years so dropdown is complete
+    distinctYearsSet.add(2026);
+    distinctYearsSet.add(2025);
+    distinctYearsSet.add(2024);
+    distinctYearsSet.add(2027);
+    const availableYears = Array.from(distinctYearsSet).sort((a, b) => b - a);
+
+    const activeYear = year && !isNaN(year) ? year : currentYear;
+
+    // 2. Compute "This Month" (duties matching current month and current year)
     const thisMonthDuties = duties.filter((d) => {
       const info = parseDutyMonth(d.dutyDate, d.createdAt);
-      return info.monthIndex === currentMonthIndex;
+      return info.monthIndex === currentMonthIndex && info.year === currentYear;
     }).length;
 
     // 3. Compute Exams vs Mocks from real MSSQL records
@@ -110,7 +129,7 @@ export class DashboardService {
       resourceId: d.employee?.resourceId || employee?.resourceId || '',
     }));
 
-    // 5. Monthly Duty Overview calculated from database records
+    // 5. Monthly Duty Overview calculated from database records for the selected year
     const months = [
       { name: 'Apr', index: 3 },
       { name: 'May', index: 4 },
@@ -123,7 +142,7 @@ export class DashboardService {
     const monthlyOverview = months.map((m) => {
       const monthDuties = duties.filter((d) => {
         const info = parseDutyMonth(d.dutyDate, d.createdAt);
-        return info.monthIndex === m.index;
+        return info.monthIndex === m.index && info.year === activeYear;
       });
       const mocks = monthDuties.filter(isMock).length;
       const exams = monthDuties.length - mocks;
@@ -132,7 +151,7 @@ export class DashboardService {
         exams,
         mocks,
         total: exams + mocks,
-        isCurrent: m.index === currentMonthIndex,
+        isCurrent: activeYear === currentYear && m.index === currentMonthIndex,
       };
     });
 
@@ -161,6 +180,8 @@ export class DashboardService {
         exams: examsCount,
         mocks: mocksCount,
       },
+      selectedYear: activeYear,
+      availableYears,
       monthlyOverview,
       recentDuties,
     };

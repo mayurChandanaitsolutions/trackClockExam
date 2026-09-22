@@ -10,7 +10,6 @@ import {
   CalendarCheck,
   GraduationCap,
   BookOpen,
-  Calendar,
   UserCheck,
   Users,
 } from 'lucide-react';
@@ -22,7 +21,10 @@ export const DashboardScreen: React.FC = () => {
   const user = authService.getStoredUser();
   const isAdmin = Boolean(user?.isAdmin || user?.role === 'admin' || user?.resourceId === '17655');
   const [employeesList, setEmployeesList] = useState<EmployeeItem[]>([]);
-  const [selectedFilterResourceId, setSelectedFilterResourceId] = useState<string>('ALL');
+  const [selectedFilterResourceId, setSelectedFilterResourceId] = useState<string>(
+    isAdmin ? 'ALL' : (user?.resourceId || '')
+  );
+  const [selectedYear, setSelectedYear] = useState<number>(2026);
 
   const [dashboardData, setDashboardData] = useState<EmployeeDashboardData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -37,14 +39,14 @@ export const DashboardScreen: React.FC = () => {
     }).catch(() => {});
   }, []);
 
-  // Fetch fresh dashboard data whenever selectedFilterResourceId changes
+  // Fetch fresh dashboard data whenever selectedFilterResourceId or selectedYear changes
   useEffect(() => {
     let isMounted = true;
 
     const fetchDashboard = async () => {
       setLoading(true);
       try {
-        const data = await dashboardService.getEmployeeDashboard(selectedFilterResourceId);
+        const data = await dashboardService.getEmployeeDashboard(selectedFilterResourceId, selectedYear);
         if (isMounted) {
           setDashboardData(data);
         }
@@ -61,7 +63,7 @@ export const DashboardScreen: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [selectedFilterResourceId]);
+  }, [selectedFilterResourceId, selectedYear]);
 
   // Derived statistics (Live from MSSQL)
   const isAll = selectedFilterResourceId === 'ALL';
@@ -72,10 +74,12 @@ export const DashboardScreen: React.FC = () => {
   const examsCount = dashboardData?.stats?.exams ?? 0;
   const mocksCount = dashboardData?.stats?.mocks ?? 0;
 
-  const displayName = isAll
-    ? (isAdmin ? 'Administrator (System Overview)' : 'All Staff Members (System View)')
-    : (dashboardData?.employee?.name || user?.name || 'Staff Member');
-  const displayResourceId = isAll ? (isAdmin ? 'ADMIN' : 'ALL') : (dashboardData?.employee?.resourceId || user?.resourceId || '');
+  const displayName = isAdmin
+    ? (isAll ? 'Administrator (System Overview)' : (dashboardData?.employee?.name || 'Staff Member'))
+    : (user?.name || dashboardData?.employee?.name || 'Employee');
+  const displayResourceId = isAdmin
+    ? (isAll ? 'ADMIN' : (dashboardData?.employee?.resourceId || selectedFilterResourceId))
+    : (user?.resourceId || dashboardData?.employee?.resourceId || '');
 
   const recentDuties: RecentDutySummary[] | undefined = dashboardData?.recentDuties;
   const monthlyChartData = dashboardData?.monthlyOverview;
@@ -97,29 +101,34 @@ export const DashboardScreen: React.FC = () => {
             {/* Blue Welcome Banner Card */}
             <div className="desktop-welcome-banner">
               <div className="welcome-banner-left">
-                <span className="banner-greeting">Welcome Back,</span>
-                <h1 className="banner-name">{displayName}</h1>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginTop: '8px' }}>
+                <div className="banner-title-row">
+                  <span className="banner-greeting">Welcome Back,</span>
+                  <h1 className="banner-name">{displayName}</h1>
+                </div>
+
+                <div className="banner-meta-row">
                   <div className="banner-resource-pill">
                     <UserCheck size={14} />
                     <span>ID: {displayResourceId}</span>
                   </div>
+                  {isAdmin ? (
+                    <span className="mobile-role-badge badge-admin">ADMIN</span>
+                  ) : (
+                    <span className="mobile-role-badge badge-staff">STAFF</span>
+                  )}
+                </div>
+              </div>
 
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(255, 255, 255, 0.18)', padding: '5px 12px', borderRadius: '20px', border: '1px solid rgba(255, 255, 255, 0.3)' }}>
-                    <Users size={14} color="#FFFFFF" />
-                    <span style={{ fontSize: '11px', color: '#E2E8F0', fontWeight: 600 }}>FILTER:</span>
+              {/* Right Side: Member Filter Controls */}
+              {employeesList.length > 0 && (
+                <div className="welcome-banner-right">
+                  <div className="banner-filter-box">
+                    <Users size={16} color="#FFFFFF" />
+                    <span className="banner-filter-label">FILTER:</span>
                     <select
                       value={selectedFilterResourceId}
                       onChange={(e) => setSelectedFilterResourceId(e.target.value)}
-                      style={{
-                        background: 'transparent',
-                        color: '#FFFFFF',
-                        border: 'none',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        outline: 'none',
-                        cursor: 'pointer',
-                      }}
+                      className="banner-filter-select"
                     >
                       <option value="ALL" style={{ color: '#0F172A' }}>
                         All Members ({dashboardData?.stats?.systemTotalDuties ?? totalDuties} Duties)
@@ -132,16 +141,7 @@ export const DashboardScreen: React.FC = () => {
                     </select>
                   </div>
                 </div>
-              </div>
-
-              <div className="welcome-banner-right">
-                <span className="banner-quote">
-                  Your dedication supports brighter futures
-                </span>
-                <div className="banner-watermark-icon">
-                  <Calendar size={110} strokeWidth={1.2} />
-                </div>
-              </div>
+              )}
             </div>
 
             {/* 4 Statistics Cards in ONE ROW */}
@@ -182,7 +182,12 @@ export const DashboardScreen: React.FC = () => {
 
             {/* Monthly Duty Overview Card */}
             <section className="desktop-chart-section">
-              <MonthlyChart data={monthlyChartData} />
+              <MonthlyChart
+                data={monthlyChartData}
+                selectedYear={selectedYear}
+                availableYears={dashboardData?.availableYears}
+                onYearChange={(yr) => setSelectedYear(yr)}
+              />
             </section>
 
             {/* Recent Duties Table */}
@@ -223,8 +228,8 @@ export const DashboardScreen: React.FC = () => {
                 border: '1px solid #DBEAFE',
               }}
             >
-              <Users size={14} color="#2563EB" />
-              <span style={{ fontSize: '11px', color: '#1E40AF', fontWeight: 600 }}>Filter:</span>
+              <Users size={15} color="#2563EB" />
+              <span style={{ fontSize: '13px', color: '#1E40AF', fontWeight: 600 }}>Filter:</span>
               <select
                 value={selectedFilterResourceId}
                 onChange={(e) => setSelectedFilterResourceId(e.target.value)}
@@ -232,8 +237,8 @@ export const DashboardScreen: React.FC = () => {
                   flex: 1,
                   background: 'transparent',
                   border: 'none',
-                  fontSize: '12px',
-                  fontWeight: 500,
+                  fontSize: '14px',
+                  fontWeight: 600,
                   color: '#1E293B',
                   outline: 'none',
                   cursor: 'pointer',
@@ -289,7 +294,12 @@ export const DashboardScreen: React.FC = () => {
 
           {/* Monthly Duty Overview */}
           <section className="mobile-chart-section">
-            <MonthlyChart data={monthlyChartData} />
+            <MonthlyChart
+              data={monthlyChartData}
+              selectedYear={selectedYear}
+              availableYears={dashboardData?.availableYears}
+              onYearChange={(yr) => setSelectedYear(yr)}
+            />
           </section>
 
           {/* Recent Duties Cards */}

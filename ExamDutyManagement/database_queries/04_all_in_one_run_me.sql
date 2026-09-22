@@ -164,20 +164,20 @@ GO
 
 -- STEP 3: INSERT MASTER DATA
 -- Cities
+IF NOT EXISTS (SELECT 1 FROM dbo.cities WHERE name = 'Mysore')
+    INSERT INTO dbo.cities (id, name, state) VALUES (NEWID(), 'Mysore', 'Karnataka');
 IF NOT EXISTS (SELECT 1 FROM dbo.cities WHERE name = 'Bengaluru')
     INSERT INTO dbo.cities (id, name, state) VALUES (NEWID(), 'Bengaluru', 'Karnataka');
-IF NOT EXISTS (SELECT 1 FROM dbo.cities WHERE name = 'Mysuru')
-    INSERT INTO dbo.cities (id, name, state) VALUES (NEWID(), 'Mysuru', 'Karnataka');
-IF NOT EXISTS (SELECT 1 FROM dbo.cities WHERE name = 'Hubballi')
-    INSERT INTO dbo.cities (id, name, state) VALUES (NEWID(), 'Hubballi', 'Karnataka');
-IF NOT EXISTS (SELECT 1 FROM dbo.cities WHERE name = 'Mangaluru')
-    INSERT INTO dbo.cities (id, name, state) VALUES (NEWID(), 'Mangaluru', 'Karnataka');
-IF NOT EXISTS (SELECT 1 FROM dbo.cities WHERE name = 'Belagavi')
-    INSERT INTO dbo.cities (id, name, state) VALUES (NEWID(), 'Belagavi', 'Karnataka');
-IF NOT EXISTS (SELECT 1 FROM dbo.cities WHERE name = 'Hyderabad')
-    INSERT INTO dbo.cities (id, name, state) VALUES (NEWID(), 'Hyderabad', 'Telangana');
-IF NOT EXISTS (SELECT 1 FROM dbo.cities WHERE name = 'Mumbai')
-    INSERT INTO dbo.cities (id, name, state) VALUES (NEWID(), 'Mumbai', 'Maharashtra');
+IF NOT EXISTS (SELECT 1 FROM dbo.cities WHERE name = 'Mangalore')
+    INSERT INTO dbo.cities (id, name, state) VALUES (NEWID(), 'Mangalore', 'Karnataka');
+IF NOT EXISTS (SELECT 1 FROM dbo.cities WHERE name = 'Shivmogga')
+    INSERT INTO dbo.cities (id, name, state) VALUES (NEWID(), 'Shivmogga', 'Karnataka');
+IF NOT EXISTS (SELECT 1 FROM dbo.cities WHERE name = 'Mandya')
+    INSERT INTO dbo.cities (id, name, state) VALUES (NEWID(), 'Mandya', 'Karnataka');
+IF NOT EXISTS (SELECT 1 FROM dbo.cities WHERE name = 'Davanagere')
+    INSERT INTO dbo.cities (id, name, state) VALUES (NEWID(), 'Davanagere', 'Karnataka');
+IF NOT EXISTS (SELECT 1 FROM dbo.cities WHERE name = 'Dharwad')
+    INSERT INTO dbo.cities (id, name, state) VALUES (NEWID(), 'Dharwad', 'Karnataka');
 
 -- Centers
 DECLARE @CityBengaluru UNIQUEIDENTIFIER = (SELECT TOP 1 id FROM dbo.cities WHERE name = 'Bengaluru');

@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, PlusCircle, ClipboardList, User } from 'lucide-react';
+import { LayoutDashboard, UserPlus, PlusCircle, ClipboardList, User } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import authService from '../services/auth.service';
@@ -17,18 +17,41 @@ export const BottomNav: React.FC = () => {
       path: '/dashboard',
       icon: <LayoutDashboard size={20} />,
     },
-    {
-      id: 'add-duty',
-      label: isAdmin ? 'Add Staff' : 'Add Duty',
-      path: '/add-duty',
-      icon: <PlusCircle size={20} />,
-    },
-    {
-      id: 'my-duties',
-      label: isAdmin ? 'Workforce' : 'My Duties',
-      path: '/my-duties',
-      icon: <ClipboardList size={20} />,
-    },
+    ...(isAdmin
+      ? [
+          {
+            id: 'add-employee',
+            label: 'Add Emp',
+            path: '/add-employee',
+            icon: <UserPlus size={20} />,
+          },
+          {
+            id: 'add-duty',
+            label: 'Assign Duty',
+            path: '/add-duty',
+            icon: <PlusCircle size={20} />,
+          },
+          {
+            id: 'my-duties',
+            label: 'Workforce',
+            path: '/my-duties',
+            icon: <ClipboardList size={20} />,
+          },
+        ]
+      : [
+          {
+            id: 'add-duty',
+            label: 'Duties',
+            path: '/add-duty',
+            icon: <PlusCircle size={20} />,
+          },
+          {
+            id: 'my-duties',
+            label: 'My Duties',
+            path: '/my-duties',
+            icon: <ClipboardList size={20} />,
+          },
+        ]),
     {
       id: 'profile',
       label: 'Profile',

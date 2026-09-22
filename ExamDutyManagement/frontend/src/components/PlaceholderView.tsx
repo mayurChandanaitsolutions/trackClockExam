@@ -1,7 +1,9 @@
-import React from 'react';
-import { ArrowLeft, Clock, LayoutDashboard, PlusCircle, ClipboardList, User, UserCheck } from 'lucide-react';
+import React, { useState } from 'react';
+import { ArrowLeft, Clock, LayoutDashboard, PlusCircle, ClipboardList, User, UserCheck, UserPlus } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { HealthBadge } from './HealthBadge';
+import authService from '../services/auth.service';
+import EmployeeDetailsModal from './EmployeeDetailsModal';
 
 interface PlaceholderViewProps {
   title: string;
@@ -11,6 +13,9 @@ interface PlaceholderViewProps {
 export const PlaceholderView: React.FC<PlaceholderViewProps> = ({ title, icon }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const user = authService.getStoredUser();
+  const resourceId = user?.resourceId || '17655';
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
 
   return (
     <div className="dashboard-container animate-fade-in">
@@ -20,10 +25,16 @@ export const PlaceholderView: React.FC<PlaceholderViewProps> = ({ title, icon })
           <div className="user-info-col">
             <span className="welcome-label">Exam Duty Portal</span>
             <h1 className="user-name">{title}</h1>
-            <div className="resource-id-pill">
+            <button
+              type="button"
+              className="resource-id-pill"
+              onClick={() => setShowDetailsModal(true)}
+              style={{ cursor: 'pointer', border: 'none', background: 'rgba(255,255,255,0.2)', color: '#FFFFFF' }}
+              title="Click to view details"
+            >
               <UserCheck size={14} />
-              <span>Resource ID: 17655</span>
-            </div>
+              <span>Resource ID: {resourceId}</span>
+            </button>
           </div>
 
           {/* Desktop Navigation Tabs */}
@@ -35,12 +46,21 @@ export const PlaceholderView: React.FC<PlaceholderViewProps> = ({ title, icon })
               <LayoutDashboard size={16} />
               <span>Dashboard</span>
             </button>
+            {user?.isAdmin && (
+              <button
+                className={`desktop-nav-btn ${location.pathname === '/add-employee' ? 'active' : ''}`}
+                onClick={() => navigate('/add-employee')}
+              >
+                <UserPlus size={16} />
+                <span>Add Employee</span>
+              </button>
+            )}
             <button
               className={`desktop-nav-btn ${location.pathname === '/add-duty' ? 'active' : ''}`}
               onClick={() => navigate('/add-duty')}
             >
               <PlusCircle size={16} />
-              <span>Add Duty</span>
+              <span>Duties</span>
             </button>
             <button
               className={`desktop-nav-btn ${location.pathname === '/my-duties' ? 'active' : ''}`}
@@ -63,6 +83,12 @@ export const PlaceholderView: React.FC<PlaceholderViewProps> = ({ title, icon })
           </div>
         </div>
       </header>
+
+      <EmployeeDetailsModal
+        resourceId={resourceId}
+        isOpen={showDetailsModal}
+        onClose={() => setShowDetailsModal(false)}
+      />
 
       {/* Main Placeholder Card */}
       <div className="placeholder-container animate-fade-in">

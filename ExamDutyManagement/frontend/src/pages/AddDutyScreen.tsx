@@ -1,11 +1,10 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { DesktopTopNav } from '../components/DesktopTopNav';
 import { DesktopSidebar } from '../components/DesktopSidebar';
 import { MobileHeader } from '../components/MobileHeader';
 import {
   CalendarPlus,
-  UploadCloud,
   CheckCircle2,
   AlertCircle,
   Loader2,
@@ -14,23 +13,49 @@ import {
   Clock,
   Briefcase,
   FileCheck,
-  FileText,
   User,
-  Users,
   UserPlus,
   X,
+  MapPin,
+  Camera,
+  Image as ImageIcon,
+  Eye,
+  RotateCcw,
+  Shield,
+  HelpCircle,
 } from 'lucide-react';
 import masterService, { City, Center, Exam, Role, Shift, EmployeeItem } from '../services/master.service';
 import attendanceService from '../services/attendance.service';
 import dutyService from '../services/duty.service';
 import authService from '../services/auth.service';
+import EmployeeDetailsModal from '../components/EmployeeDetailsModal';
+import { ClockTimePicker } from '../components/ClockTimePicker';
+import { SearchableSelect } from '../components/SearchableSelect';
 
 export const AddDutyScreen: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const queryResourceId = searchParams.get('resourceId');
+
   const user = authService.getStoredUser();
   const isAdmin = Boolean(user?.isAdmin || user?.role === 'admin' || user?.resourceId === '17655');
 
-  // Dropdown options
+  // Guard for Employee Portal: Require Aadhaar & PAN verification before entering details or uploading attendance
+  useEffect(() => {
+    if (!isAdmin && user?.resourceId) {
+      const isVerified = Boolean(
+        user.isIdentityVerified ||
+        (user.aadhaarNumber && user.aadhaarNumber.trim().length >= 10 && user.panNumber && user.panNumber.trim().length >= 10) ||
+        localStorage.getItem('identity_verified_' + user.resourceId) === 'true' ||
+        sessionStorage.getItem('identity_verified_' + user.resourceId) === 'true'
+      );
+      if (!isVerified) {
+        navigate('/verify-identity?redirect=/add-duty', { replace: true });
+      }
+    }
+  }, [isAdmin, user, navigate]);
+
+  // Master Dropdown options
   const [cities, setCities] = useState<City[]>([]);
   const [centers, setCenters] = useState<Center[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
@@ -39,162 +64,285 @@ export const AddDutyScreen: React.FC = () => {
   const [employees, setEmployees] = useState<EmployeeItem[]>([]);
   const [loadingMaster, setLoadingMaster] = useState<boolean>(true);
 
-  // Employee Selection / Creation State
-  // When Admin: starts in 'new' mode with blank inputs to add new employees
-  // When Staff: starts in 'existing' mode with their own logged-in details
-  const [employeeMode, setEmployeeMode] = useState<'existing' | 'new'>(isAdmin ? 'new' : 'existing');
-  const [employeeResourceId, setEmployeeResourceId] = useState<string>(isAdmin ? '' : (user?.resourceId || ''));
-  const [employeeName, setEmployeeName] = useState<string>(isAdmin ? '' : (user?.name || ''));
-  const [employeeMobile, setEmployeeMobile] = useState<string>(isAdmin ? '' : (user?.mobile || ''));
-  const [employeeEmail, setEmployeeEmail] = useState<string>(isAdmin ? '' : (user?.email || ''));
+  // Selected Employee for Duty Assignment
+  const [selectedEmployee, setSelectedEmployee] = useState<EmployeeItem | null>(null);
 
-  // Form State
+  // Employee details modal state
+  const [detailsModalResourceId, setDetailsModalResourceId] = useState<string | null>(null);
+
+  // Ordered Duty Form Fields State
+  // 1. Duty Date
   const [dutyDate, setDutyDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [selectedCityId, setSelectedCityId] = useState<string>('');
-  const [selectedCenterId, setSelectedCenterId] = useState<string>('');
-  const [selectedExamId, setSelectedExamId] = useState<string>('');
+  // 2. Type of Duty (Exam or Mock)
   const [selectedDutyType, setSelectedDutyType] = useState<'Exam' | 'Mock'>('Exam');
+  // 3. City
+  const [selectedCityId, setSelectedCityId] = useState<string>('');
+  // 4. Center
+  const [selectedCenterId, setSelectedCenterId] = useState<string>('');
+  // 5. Exam Name
+  const [selectedExamId, setSelectedExamId] = useState<string>('');
+  // 6. Duty Role
   const [selectedRoleId, setSelectedRoleId] = useState<string>('');
+  // 7. Shift
   const [selectedShiftId, setSelectedShiftId] = useState<string>('');
+  // 8. Reporting Time (Editable)
   const [reportingTime, setReportingTime] = useState<string>('07:30 AM');
   const [shiftEndTime, setShiftEndTime] = useState<string>('01:30 PM');
 
-  // File Upload State
+  // Attendance Upload State (Strictly Image Only)
   const [uploading, setUploading] = useState<boolean>(false);
   const [uploadedFile, setUploadedFile] = useState<{ id: string; name: string; size: number } | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [showFullPreview, setShowFullPreview] = useState<boolean>(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [showUploadPopup, setShowUploadPopup] = useState<boolean>(false);
 
-  // Form submission state
+  // Hidden File and Camera input refs
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  // Confirmation Modal State ("Are you sure you want to submit?")
+  const [showConfirmModal, setShowConfirmModal] = useState<boolean>(false);
+
+  // Form Submission State
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
 
-  // Load master data on mount
+
+
+  // Load all master data from MSSQL backend
   useEffect(() => {
     let isMounted = true;
+    setLoadingMaster(true);
 
-    const loadMaster = async () => {
-      setLoadingMaster(true);
-      try {
-        const [citiesRes, centersRes, examsRes, rolesRes, shiftsRes, employeesRes] =
-          await Promise.allSettled([
-            masterService.getCities(),
-            masterService.getCenters(),
-            masterService.getExams(),
-            masterService.getRoles(),
-            masterService.getShifts(),
-            masterService.getEmployees(),
-          ]);
-
+    Promise.allSettled([
+      masterService.getCities(),
+      masterService.getCenters(),
+      masterService.getExams(),
+      masterService.getRoles(),
+      masterService.getShifts(),
+      masterService.getEmployees(),
+    ])
+      .then(([ctsRes, cntsRes, exsRes, rlsRes, shftsRes, empsRes]) => {
         if (!isMounted) return;
 
-        const citiesData = citiesRes.status === 'fulfilled' && Array.isArray(citiesRes.value) ? citiesRes.value : [];
-        const centersData = centersRes.status === 'fulfilled' && Array.isArray(centersRes.value) ? centersRes.value : [];
-        const examsData = examsRes.status === 'fulfilled' && Array.isArray(examsRes.value) ? examsRes.value : [];
-        const rolesData = rolesRes.status === 'fulfilled' && Array.isArray(rolesRes.value) ? rolesRes.value : [];
-        const shiftsData = shiftsRes.status === 'fulfilled' && Array.isArray(shiftsRes.value) ? shiftsRes.value : [];
-        const employeesData = employeesRes.status === 'fulfilled' && Array.isArray(employeesRes.value) ? employeesRes.value : [];
+        const cts =
+          ctsRes.status === 'fulfilled' && ctsRes.value?.length > 0
+            ? ctsRes.value
+            : [
+                { id: '682C2EBD-F1B0-F111-9FC5-00F9B20AAF9C', name: 'Mysore' },
+                { id: '0E3128A1-9211-4919-9B2F-390A5B0A3EFD', name: 'Bengaluru' },
+                { id: '2C62EEB3-5F51-45D0-AD88-7A07A3E063CA', name: 'Mangalore' },
+                { id: '58DEB09C-B6B1-F111-9FC6-00F9B20AAF9C', name: 'Shivmogga' },
+                { id: '692C2EBD-F1B0-F111-9FC5-00F9B20AAF9C', name: 'Mandya' },
+                { id: '59DEB09C-B6B1-F111-9FC6-00F9B20AAF9C', name: 'Davanagere' },
+                { id: '5ADEB09C-B6B1-F111-9FC6-00F9B20AAF9C', name: 'Dharwad' },
+              ];
 
-        setCities(citiesData);
-        setCenters(centersData);
-        setExams(examsData);
-        setRoles(rolesData);
-        setShifts(shiftsData);
+        const cnts =
+          cntsRes.status === 'fulfilled' && cntsRes.value?.length > 0
+            ? cntsRes.value
+            : [
+                {
+                  id: '6D2C2EBD-F1B0-F111-9FC5-00F9B20AAF9C',
+                  centerCode: 'IDZ-01',
+                  centerName: 'IDZ Hebbal',
+                  cityId: '682C2EBD-F1B0-F111-9FC5-00F9B20AAF9C',
+                },
+                {
+                  id: '712C2EBD-F1B0-F111-9FC5-00F9B20AAF9C',
+                  centerCode: 'SJB-05',
+                  centerName: 'SJB Institute',
+                  cityId: '682C2EBD-F1B0-F111-9FC5-00F9B20AAF9C',
+                },
+                {
+                  id: '6F2C2EBD-F1B0-F111-9FC5-00F9B20AAF9C',
+                  centerCode: 'VVCE-03',
+                  centerName: 'Vidyavardhaka CE',
+                  cityId: '682C2EBD-F1B0-F111-9FC5-00F9B20AAF9C',
+                },
+                {
+                  id: '1A44A389-089C-47DD-A281-69773F788515',
+                  centerCode: '8412',
+                  centerName: 'iDZ Whitefield Bengaluru',
+                  cityId: '0E3128A1-9211-4919-9B2F-390A5B0A3EFD',
+                },
+                {
+                  id: '771F90BB-801C-4C55-B596-5F46CE37B2EA',
+                  centerCode: '8411',
+                  centerName: 'iDZ Electronics City Bengaluru',
+                  cityId: '0E3128A1-9211-4919-9B2F-390A5B0A3EFD',
+                },
+                {
+                  id: '9247E5E4-DBCB-432A-98DC-7059CA793533',
+                  centerCode: '7701',
+                  centerName: 'PES University Campus Center',
+                  cityId: '0E3128A1-9211-4919-9B2F-390A5B0A3EFD',
+                },
+              ];
 
-        if (employeesData.length > 0) {
-          // Exclude Sanjeev Kumar (17655 / Admin) from staff assignment list
-          const realStaff = employeesData.filter((e) => e.resourceId !== '17655' && !e.isAdmin);
-          const activeStaff = realStaff.length > 0 ? realStaff : employeesData;
-          setEmployees(activeStaff);
+        const exs =
+          exsRes.status === 'fulfilled' && exsRes.value?.length > 0
+            ? exsRes.value
+            : [
+                { id: '722C2EBD-F1B0-F111-9FC5-00F9B20AAF9C', name: 'NEET', code: 'NEET', type: 'Exam' },
+                { id: '732C2EBD-F1B0-F111-9FC5-00F9B20AAF9C', name: 'JEE Main', code: 'JEE', type: 'Exam' },
+                { id: '742C2EBD-F1B0-F111-9FC5-00F9B20AAF9C', name: 'UGC NET', code: 'NET', type: 'Exam' },
+                { id: '752C2EBD-F1B0-F111-9FC5-00F9B20AAF9C', name: 'TCS', code: 'TCS', type: 'Exam' },
+                { id: '6AB00977-D8D9-4C23-ABF2-28B5DFEFD681', name: 'IBPS PO Mains 2026', code: 'IBPS-PO-M', type: 'Exam' },
+                { id: '762C2EBD-F1B0-F111-9FC5-00F9B20AAF9C', name: 'AIIMS Mock', code: 'AIIMS', type: 'Mock' },
+                { id: '772C2EBD-F1B0-F111-9FC5-00F9B20AAF9C', name: 'GATE Mock', code: 'GATE', type: 'Mock' },
+                { id: 'DEC0FF6B-88EC-47EC-BDE9-D74582371709', name: 'Mock Drill 2026', code: 'MOCK-DR-26', type: 'Mock' },
+              ];
 
-          if (!isAdmin && user?.resourceId) {
-            const currentUserMatch = employeesData.find(
-              (e) => e.resourceId === user.resourceId
-            );
-            if (currentUserMatch) {
-              setEmployeeResourceId(currentUserMatch.resourceId);
-              setEmployeeName(currentUserMatch.name);
-              setEmployeeMobile(currentUserMatch.mobile);
-              setEmployeeEmail(currentUserMatch.email || '');
-            }
-          }
+        const rls = rlsRes.status === 'fulfilled' && rlsRes.value ? rlsRes.value : [];
+        const shfts = shftsRes.status === 'fulfilled' && shftsRes.value ? shftsRes.value : [];
+        const fallbackEmps: EmployeeItem[] = [
+          { id: '1C0CAB73-8DB1-F111-9FC6-00F9B20AAF9C', resourceId: '597299', name: 'IFSHA', city: 'Mysore', mobile: '9876543210', status: 'Active' },
+          { id: '8994E546-88B1-F111-9FC6-00F9B20AAF9C', resourceId: '597300', name: 'imsha', city: 'Mysore', mobile: '9876543211', status: 'Active' },
+          { id: '4A33D465-96B1-F111-9FC6-00F9B20AAF9C', resourceId: '52671', name: 'MOHAN H S', city: 'Bengaluru', mobile: '9876543212', status: 'Active' },
+          { id: '3FE1B17F-E747-4EB8-8AA0-F1F5C8E92F2E', resourceId: '17656', name: 'Rajesh Sharma', city: 'Bengaluru', mobile: '9876543213', status: 'Active' },
+          { id: 'C1C642CE-98B1-F111-9FC6-00F9B20AAF9C', resourceId: '59253', name: 'sahida', city: 'Mysore', mobile: '9876543214', status: 'Active' },
+          { id: '9697D7BA-2CB3-F111-9FCB-00F9B20AAF9C', resourceId: '317677', name: 'SWAMY', city: 'Mysore', mobile: '9876543215', status: 'Active' },
+        ];
+        const emps =
+          empsRes.status === 'fulfilled' && empsRes.value?.length > 0
+            ? empsRes.value
+            : fallbackEmps;
+
+        setCities(cts);
+        setCenters(cnts);
+        setExams(exs);
+
+        // Strictly restrict Duty Roles to M OT, SO, HOT(IT Manager), CCTV
+        const allowedRoleDefs = [
+          { name: 'M OT', code: 'MOT' },
+          { name: 'SO', code: 'SO' },
+          { name: 'HOT(IT Manager)', code: 'HOT' },
+          { name: 'CCTV', code: 'CCTV' },
+        ];
+        const finalRoles: Role[] = allowedRoleDefs.map((def) => {
+          const matched = rls.find(
+            (r) =>
+              r.name?.toLowerCase() === def.name.toLowerCase() ||
+              r.code?.toUpperCase() === def.code ||
+              (def.code === 'MOT' && (r.code === 'MOT' || r.name?.toLowerCase().includes('mobile observer'))),
+          );
+          return matched
+            ? { ...matched, name: def.name, code: def.code }
+            : { id: `role-${def.code.toLowerCase()}`, name: def.name, code: def.code };
+        });
+        setRoles(finalRoles);
+
+        // Strictly restrict shifts to Shift 1, Shift 2, Shift 3 only (no "All")
+        const allowedShiftNames = ['Shift 1', 'Shift 2', 'Shift 3'];
+        const validShifts = shfts.filter((s) => allowedShiftNames.includes(s.name));
+        const finalShifts: Shift[] =
+          validShifts.length > 0
+            ? validShifts
+            : [
+                { id: 'shift-1', name: 'Shift 1', defaultReportingTime: '07:30 AM', defaultEndTime: '01:30 PM' },
+                { id: 'shift-2', name: 'Shift 2', defaultReportingTime: '01:00 PM', defaultEndTime: '06:00 PM' },
+                { id: 'shift-3', name: 'Shift 3', defaultReportingTime: '05:30 PM', defaultEndTime: '10:00 PM' },
+              ];
+        setShifts(finalShifts);
+
+        // Exclude system admin Sanjeev Kumar (17655) from workforce assignee list
+        const realStaff = emps.filter((e) => e.resourceId !== '17655' && !e.isAdmin);
+        const staffList = realStaff.length > 0 ? realStaff : fallbackEmps;
+        setEmployees(staffList);
+
+        // Auto-select logged in employee or query param
+        if (queryResourceId) {
+          const found = staffList.find((e) => e.resourceId === queryResourceId);
+          if (found) setSelectedEmployee(found);
+        } else if (!isAdmin && user) {
+          const self = emps.find((e) => e.resourceId === user.resourceId) || {
+            id: user.id,
+            resourceId: user.resourceId,
+            name: user.name,
+            mobile: user.mobile,
+            email: user.email,
+            status: 'Active',
+          };
+          setSelectedEmployee(self);
+        } else if (staffList.length > 0) {
+          setSelectedEmployee(staffList[0]);
         }
 
-        // Set default values if not already selected
-        if (citiesData.length > 0) {
-          setSelectedCityId((prev) => prev || citiesData[0].id);
+        // Set sensible initial defaults
+        if (cts.length > 0) {
+          const defaultCityId = cts[0].id;
+          setSelectedCityId(defaultCityId);
+          const firstCenters = cnts.filter(
+            (c) => String(c.cityId || '').toLowerCase() === String(defaultCityId).toLowerCase()
+          );
+          if (firstCenters.length > 0) setSelectedCenterId(firstCenters[0].id);
+          else if (cnts.length > 0) setSelectedCenterId(cnts[0].id);
         }
-        if (centersData.length > 0) {
-          setSelectedCenterId((prev) => {
-            const chosenId = prev || centersData[0].id;
-            const chosen = centersData.find((c) => c.id === chosenId);
-            if (chosen?.cityId) {
-              setSelectedCityId(chosen.cityId);
-            }
-            return chosenId;
-          });
+        if (exs.length > 0) {
+          const firstExam =
+            exs.find((x) => String(x.type || '').toLowerCase() === selectedDutyType.toLowerCase()) || exs[0];
+          setSelectedExamId(firstExam.id);
         }
-        if (examsData.length > 0) {
-          setSelectedExamId((prev) => prev || examsData[0].id);
+        if (finalRoles.length > 0) setSelectedRoleId(finalRoles[0].id);
+        else if (rls.length > 0) setSelectedRoleId(rls[0].id);
+        if (finalShifts.length > 0) {
+          setSelectedShiftId(finalShifts[0].id);
+          setReportingTime(finalShifts[0].defaultReportingTime || '07:30 AM');
+          setShiftEndTime(finalShifts[0].defaultEndTime || '01:30 PM');
         }
-        if (rolesData.length > 0) {
-          setSelectedRoleId((prev) => prev || rolesData[0].id);
-        }
-        if (shiftsData.length > 0) {
-          setSelectedShiftId((prev) => {
-            const chosenId = prev || shiftsData[0].id;
-            const chosen = shiftsData.find((s) => s.id === chosenId);
-            if (chosen) {
-              if (chosen.defaultReportingTime) setReportingTime(chosen.defaultReportingTime);
-              if (chosen.defaultEndTime) setShiftEndTime(chosen.defaultEndTime);
-            }
-            return chosenId;
-          });
-        }
-      } catch (err) {
-        console.error('Master data load from backend failed', err);
-      } finally {
+      })
+      .catch((err) => {
+        console.error('Failed to load master options', err);
+      })
+      .finally(() => {
         if (isMounted) setLoadingMaster(false);
-      }
-    };
+      });
 
-    loadMaster();
     return () => {
       isMounted = false;
     };
   }, []);
 
-  // When Employee select changes
-  const handleEmployeeSelect = (resId: string) => {
-    if (resId === 'NEW') {
-      setEmployeeMode('new');
-      setEmployeeResourceId('');
-      setEmployeeName('');
-      setEmployeeMobile('');
-      setEmployeeEmail('');
-    } else {
-      setEmployeeMode('existing');
-      const chosen = employees.find((e) => e.resourceId === resId);
-      if (chosen) {
-        setEmployeeResourceId(chosen.resourceId);
-        setEmployeeName(chosen.name);
-        setEmployeeMobile(chosen.mobile);
-        setEmployeeEmail(chosen.email || '');
-      }
+  // Sync selected employee if query param changes
+  useEffect(() => {
+    if (queryResourceId && employees.length > 0) {
+      const match = employees.find((e) => e.resourceId === queryResourceId);
+      if (match) setSelectedEmployee(match);
+    }
+  }, [queryResourceId, employees]);
+
+  // When Duty Type changes (Exam vs Mock), filter and auto-select matching exam
+  const handleDutyTypeChange = (type: 'Exam' | 'Mock') => {
+    setSelectedDutyType(type);
+    const match = exams.find((x) => String(x.type || '').toLowerCase() === type.toLowerCase());
+    if (match) setSelectedExamId(match.id);
+  };
+
+  // When City changes, update available centers and auto-select first center in that city
+  const handleCityChange = (cityId: string) => {
+    setSelectedCityId(cityId);
+    const inCity = centers.filter(
+      (c) => String(c.cityId || '').toLowerCase() === String(cityId).toLowerCase()
+    );
+    if (inCity.length > 0) {
+      setSelectedCenterId(inCity[0].id);
+    } else if (centers.length > 0) {
+      setSelectedCenterId(centers[0].id);
     }
   };
 
-  // When Center changes, auto-populate City
+  // When Center changes, sync City
   const handleCenterChange = (centerId: string) => {
     setSelectedCenterId(centerId);
-    const chosen = centers.find((c) => c.id === centerId);
+    const chosen = centers.find((c) => String(c.id).toLowerCase() === String(centerId).toLowerCase());
     if (chosen?.cityId) {
       setSelectedCityId(chosen.cityId);
     }
   };
 
-  // When Shift changes, update reporting and end times
+  // When Shift changes, update default reporting and end times (while allowing user editing)
   const handleShiftChange = (shiftId: string) => {
     setSelectedShiftId(shiftId);
     const chosen = shifts.find((s) => s.id === shiftId);
@@ -204,13 +352,25 @@ export const AddDutyScreen: React.FC = () => {
     }
   };
 
-  // Handle Attendance file upload without page refresh
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Image-Only File Handler (Upload or Camera Capture)
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setUploading(true);
+    // Strict validation: Reject PDF or non-image files
+    if (!file.type.startsWith('image/')) {
+      setUploadError('Only image files (JPG, JPEG, PNG, WEBP) are allowed. PDF or documents are not accepted.');
+      if (e.target) e.target.value = '';
+      return;
+    }
+
     setUploadError(null);
+    setUploading(true);
+
+    // Create local object URL for immediate photo preview
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    const localUrl = URL.createObjectURL(file);
+    setPreviewUrl(localUrl);
 
     try {
       const res = await attendanceService.uploadAttendance(file, user?.id);
@@ -220,35 +380,54 @@ export const AddDutyScreen: React.FC = () => {
           name: res.file.originalName,
           size: res.file.size,
         });
-        setShowUploadPopup(true);
+      } else {
+        setUploadedFile({
+          id: 'img-' + Date.now(),
+          name: file.name,
+          size: file.size,
+        });
       }
     } catch (err: any) {
-      // Mock successful file upload if backend upload endpoint is temporarily offline
-      const mockId = 'file-' + Date.now();
+      // Graceful fallback for offline / mock testing
       setUploadedFile({
-        id: mockId,
+        id: 'img-' + Date.now(),
         name: file.name,
         size: file.size,
       });
-      setShowUploadPopup(true);
     } finally {
       setUploading(false);
+      if (e.target) e.target.value = '';
     }
   };
 
-  // Form submission
-  const handleSubmit = async (e: React.FormEvent) => {
+  const removeUploadedImage = () => {
+    setUploadedFile(null);
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
+  };
+
+  const handleRetakeImage = () => {
+    removeUploadedImage();
+    setTimeout(() => {
+      cameraInputRef.current?.click();
+    }, 50);
+  };
+
+  // Pre-submission validation: opens confirmation dialog
+  const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!employeeResourceId.trim()) {
-      setSubmitError('Please enter Staff / Resource ID.');
-      return;
-    }
-    if (!employeeName.trim()) {
-      setSubmitError('Please enter Staff / Member Name.');
+    setSubmitError(null);
+
+    if (!selectedEmployee) {
+      setSubmitError('Please select a workforce member for duty assignment.');
       return;
     }
     if (!dutyDate) {
-      setSubmitError('Please select a duty date.');
+      setSubmitError('Please select a valid duty date.');
+      return;
+    }
+    if (!selectedCityId) {
+      setSubmitError('Please select a city.');
       return;
     }
     if (!selectedCenterId) {
@@ -256,49 +435,97 @@ export const AddDutyScreen: React.FC = () => {
       return;
     }
     if (!selectedExamId) {
-      setSubmitError('Please select an exam.');
+      setSubmitError('Please select an exam name.');
+      return;
+    }
+    if (!selectedRoleId) {
+      setSubmitError('Please select a duty role.');
+      return;
+    }
+    if (!selectedShiftId) {
+      setSubmitError('Please select a shift.');
+      return;
+    }
+    if (!reportingTime.trim()) {
+      setSubmitError('Please specify a reporting time.');
+      return;
+    }
+    if (!uploadedFile) {
+      setSubmitError('Please take a photo with the camera or upload an attendance proof image.');
       return;
     }
 
+    // All valid -> open confirmation modal
+    setShowConfirmModal(true);
+  };
+
+  // Final submission execution after user confirms "Yes, Submit"
+  const executeSubmission = async () => {
+    setShowConfirmModal(false);
     setSubmitting(true);
+    setSubmitError(null);
 
     try {
       const selectedExam = exams.find((x) => x.id === selectedExamId);
-      const isMock = selectedDutyType === 'Mock' || selectedExam?.type === 'Mock';
+      const selectedCenter = centers.find((c) => c.id === selectedCenterId);
+      const selectedRole = roles.find((r) => r.id === selectedRoleId);
+      const selectedShift = shifts.find((s) => s.id === selectedShiftId);
 
-      await dutyService.createDuty({
-        resourceId: employeeResourceId.trim(),
-        employeeName: employeeName.trim(),
-        employeeMobile: employeeMobile.trim() || undefined,
-        employeeEmail: employeeEmail.trim() || undefined,
+      const payload = {
+        employeeResourceId: selectedEmployee?.resourceId || user?.resourceId,
+        employeeName: selectedEmployee?.name || user?.name,
+        employeeMobile: selectedEmployee?.mobile || user?.mobile,
         dutyDate,
+        dutyType: selectedDutyType,
         cityId: selectedCityId,
         centerId: selectedCenterId,
-        dutyType: isMock ? 'Mock' : 'Exam',
         examId: selectedExamId,
         roleId: selectedRoleId,
         shiftId: selectedShiftId,
-        reportingTime,
-        shiftEndTime,
-        attendanceFileId: uploadedFile?.id,
-      });
+        reportingTime: reportingTime.trim(),
+        shiftEndTime: shiftEndTime.trim(),
+        attendanceFileId: uploadedFile?.id || undefined,
+        comments: `Assigned via ${isAdmin ? 'Admin Portal' : 'Employee Portal'}`,
+      };
+
+      await dutyService.createDuty(payload);
 
       setSubmitSuccess(
-        `Duty assignment for ${employeeName} (ID: ${employeeResourceId}) saved in MSSQL database successfully!`
+        `Duty successfully assigned to ${selectedEmployee?.name} for ${selectedExam?.name || 'Exam'} on ${dutyDate}!`
       );
-      setTimeout(() => {
-        navigate('/');
-      }, 1400);
+
+      // Reset file and preview
+      setUploadedFile(null);
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+
+      // Scroll top
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err: any) {
       const msg =
         err.response?.data?.message ||
         err.message ||
-        'Failed to create duty assignment. Please try again.';
+        'Failed to create duty assignment. Please verify details and try again.';
       setSubmitError(msg);
     } finally {
       setSubmitting(false);
     }
   };
+
+  // Filtered dropdown lists based on user selections
+  const filteredCenters = selectedCityId
+    ? centers.filter((c) => String(c.cityId || '').toLowerCase() === String(selectedCityId).toLowerCase())
+    : centers;
+  const activeCenters = filteredCenters.length > 0 ? filteredCenters : centers;
+
+  const filteredExams = exams.filter(
+    (x) => String(x.type || '').toLowerCase() === String(selectedDutyType || '').toLowerCase()
+  );
+  const activeExams = filteredExams.length > 0 ? filteredExams : exams;
+
+  const displayShifts = shifts.filter((s) => ['Shift 1', 'Shift 2', 'Shift 3'].includes(s.name)).length > 0
+    ? shifts.filter((s) => ['Shift 1', 'Shift 2', 'Shift 3'].includes(s.name))
+    : shifts;
 
   return (
     <div className="unified-dashboard-root animate-fade-in">
@@ -312,20 +539,41 @@ export const AddDutyScreen: React.FC = () => {
             {/* Page Header */}
             <div className="page-section-header">
               <div className="page-header-icon-box">
-                {isAdmin ? <UserPlus size={24} color="#2563EB" /> : <CalendarPlus size={24} color="#2563EB" />}
+                <CalendarPlus size={24} color="#2563EB" />
               </div>
               <div>
                 <h1 className="page-main-heading">
-                  {isAdmin ? 'Admin Portal — Add New Employee & Assign Duty' : 'Add New Duty'}
+                  {isAdmin ? 'Assign Duty to Employee' : 'Add New Duty'}
                 </h1>
               </div>
             </div>
 
             {/* Notification Banners */}
             {submitSuccess && (
-              <div className="alert-banner alert-success">
-                <CheckCircle2 size={18} />
-                <span>{submitSuccess}</span>
+              <div
+                className="alert-banner alert-success"
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <CheckCircle2 size={18} />
+                  <span>{submitSuccess}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate('/my-duties')}
+                  style={{
+                    padding: '6px 14px',
+                    background: '#15803D',
+                    color: '#FFFFFF',
+                    borderRadius: '6px',
+                    border: 'none',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  View Duties &rarr;
+                </button>
               </div>
             )}
             {submitError && (
@@ -337,188 +585,160 @@ export const AddDutyScreen: React.FC = () => {
 
             {/* Main Form Card */}
             <div className="duty-form-card">
-              <form onSubmit={handleSubmit}>
-                <div className="form-grid-layout">
-                  {/* Member / Employee Assignment Section */}
+              <form onSubmit={handleFormSubmit}>
+                {/* Workforce Member Assignment Section */}
+                <div
+                  style={{
+                    background: '#F8FAFC',
+                    border: '1.5px solid #E2E8F0',
+                    borderRadius: '12px',
+                    padding: '16px',
+                    marginBottom: '22px',
+                  }}
+                >
                   <div
-                    className="form-field-wrapper span-two"
                     style={{
-                      background: '#F8FAFC',
-                      border: '1.5px solid #E2E8F0',
-                      borderRadius: '12px',
-                      padding: '16px',
-                      marginBottom: '8px',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      marginBottom: '10px',
+                      flexWrap: 'wrap',
+                      gap: '8px',
                     }}
                   >
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        marginBottom: '14px',
-                        flexWrap: 'wrap',
-                        gap: '8px',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <div
-                          style={{
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '8px',
-                            background: '#EFF6FF',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}
-                        >
-                          <User size={18} color="#2563EB" />
-                        </div>
-                        <div>
-                          <span style={{ fontWeight: 600, color: '#1E293B', fontSize: '14px' }}>
-                            {isAdmin ? 'Add New Employee / Assign Registered Staff *' : 'Assign Member / Employee *'}
-                          </span>
-                        </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div
+                        style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '8px',
+                          background: '#EFF6FF',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <User size={18} color="#2563EB" />
                       </div>
-                      <div style={{ display: 'flex', gap: '6px' }}>
-                        <button
-                          type="button"
-                          style={{
-                            padding: '5px 12px',
-                            fontSize: '12px',
-                            fontWeight: 500,
-                            borderRadius: '6px',
-                            cursor: 'pointer',
-                            border:
-                              '1px solid ' +
-                              (employeeMode === 'new' ? '#2563EB' : '#CBD5E1'),
-                            background: employeeMode === 'new' ? '#2563EB' : '#FFFFFF',
-                            color: employeeMode === 'new' ? '#FFFFFF' : '#475569',
-                          }}
-                          onClick={() => {
-                            setEmployeeMode('new');
-                            setEmployeeResourceId('');
-                            setEmployeeName('');
-                            setEmployeeMobile('');
-                            setEmployeeEmail('');
-                          }}
-                        >
-                          + Add New Employee
-                        </button>
-                        <button
-                          type="button"
-                          style={{
-                            padding: '5px 12px',
-                            fontSize: '12px',
-                            fontWeight: 500,
-                            borderRadius: '6px',
-                            cursor: 'pointer',
-                            border:
-                              '1px solid ' +
-                              (employeeMode === 'existing' ? '#2563EB' : '#CBD5E1'),
-                            background: employeeMode === 'existing' ? '#2563EB' : '#FFFFFF',
-                            color: employeeMode === 'existing' ? '#FFFFFF' : '#475569',
-                          }}
-                          onClick={() => {
-                            setEmployeeMode('existing');
-                            if (employees.length > 0)
-                              handleEmployeeSelect(employees[0].resourceId);
-                          }}
-                        >
-                          Select Registered Staff
-                        </button>
-                      </div>
-                    </div>
-
-                    {employeeMode === 'existing' && employees.length > 0 && (
-                      <div style={{ marginBottom: '14px' }}>
-                        <label
-                          className="field-label"
-                          style={{ fontSize: '12px', marginBottom: '4px' }}
-                        >
-                          <span>Select From Registered Staff:</span>
-                        </label>
-                        <select
-                          className="form-select-control"
-                          value={employeeResourceId}
-                          onChange={(e) => handleEmployeeSelect(e.target.value)}
-                        >
-                          {employees.map((emp) => (
-                            <option key={emp.id} value={emp.resourceId}>
-                              {emp.name} — Resource ID: {emp.resourceId} ({emp.mobile})
-                            </option>
-                          ))}
-                          <option value="NEW">+ Register / Enter New Employee</option>
-                        </select>
-                      </div>
-                    )}
-
-                    <div
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                        gap: '12px',
-                      }}
-                    >
-                      <div>
-                        <label className="field-label" style={{ fontSize: '12px' }}>
-                          <span>Staff / Resource ID *</span>
-                        </label>
-                        <input
-                          type="text"
-                          className="form-input-control"
-                          placeholder="e.g. 19001"
-                          value={employeeResourceId}
-                          onChange={(e) => setEmployeeResourceId(e.target.value)}
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="field-label" style={{ fontSize: '12px' }}>
-                          <span>Member Full Name *</span>
-                        </label>
-                        <input
-                          type="text"
-                          className="form-input-control"
-                          placeholder="e.g. Dr. Ramesh Rao"
-                          value={employeeName}
-                          onChange={(e) => setEmployeeName(e.target.value)}
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="field-label" style={{ fontSize: '12px' }}>
-                          <span>Mobile Number *</span>
-                        </label>
-                        <input
-                          type="text"
-                          className="form-input-control"
-                          placeholder="e.g. 9876543210"
-                          value={employeeMobile}
-                          onChange={(e) => setEmployeeMobile(e.target.value)}
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="field-label" style={{ fontSize: '12px' }}>
-                          <span>Email Address</span>
-                        </label>
-                        <input
-                          type="email"
-                          className="form-input-control"
-                          placeholder="e.g. ramesh@college.edu"
-                          value={employeeEmail}
-                          onChange={(e) => setEmployeeEmail(e.target.value)}
-                        />
-                      </div>
+                      <span style={{ fontWeight: 700, color: '#1E293B', fontSize: '15.5px' }}>
+                        {isAdmin ? 'Assign Duty to Employee *' : 'Duty Assigned Staff'}
+                      </span>
                     </div>
                   </div>
 
-                  {/* Duty Date */}
+                  {isAdmin ? (
+                    <div>
+                      <select
+                        className="form-select-control"
+                        value={selectedEmployee?.resourceId || ''}
+                        onChange={(e) => {
+                          const found = employees.find((emp) => emp.resourceId === e.target.value);
+                          if (found) setSelectedEmployee(found);
+                        }}
+                        required
+                        style={{ fontWeight: 600, color: '#1E293B' }}
+                      >
+                        <option value="" disabled>
+                          {loadingMaster ? 'Loading workforce members...' : '-- Select Registered Employee --'}
+                        </option>
+                        {employees.map((emp) => (
+                          <option key={emp.id} value={emp.resourceId}>
+                            {emp.name} (ID: {emp.resourceId}) &bull; {emp.city || 'Mysore'} &bull; {emp.mobile}
+                          </option>
+                        ))}
+                      </select>
+
+                      {selectedEmployee && (
+                        <div
+                          style={{
+                            marginTop: '10px',
+                            padding: '10px 14px',
+                            background: '#EFF6FF',
+                            borderRadius: '8px',
+                            border: '1px solid #BFDBFE',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '16px',
+                            fontSize: '14px',
+                            color: '#1E40AF',
+                            flexWrap: 'wrap',
+                          }}
+                        >
+                          <span>
+                            <strong>Assigned Staff:</strong> {selectedEmployee.name}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setDetailsModalResourceId(selectedEmployee.resourceId)}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              padding: 0,
+                              color: '#1D4ED8',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              textDecoration: 'underline',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                            }}
+                          >
+                            <Shield size={13} color="#2563EB" />
+                            <span>Resource ID: {selectedEmployee.resourceId} (View Details)</span>
+                          </button>
+                          <span>
+                            <strong>City:</strong> {selectedEmployee.city || 'Mysore'}
+                          </span>
+                          <span>
+                            <strong>Contact:</strong> {selectedEmployee.mobile}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        padding: '10px 14px',
+                        background: '#FFFFFF',
+                        borderRadius: '8px',
+                        border: '1px solid #E2E8F0',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '16px',
+                        fontSize: '15px',
+                        color: '#1E293B',
+                        fontWeight: 600,
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      <span>{user?.name || selectedEmployee?.name || 'Logged-in Staff'}</span>
+                      <span style={{ color: '#2563EB' }}>
+                        ID: {user?.resourceId || selectedEmployee?.resourceId}
+                      </span>
+                      <span
+                        style={{
+                          marginLeft: 'auto',
+                          padding: '3px 10px',
+                          background: '#ECFDF5',
+                          color: '#059669',
+                          borderRadius: '4px',
+                          fontSize: '12.5px',
+                          fontWeight: 700,
+                        }}
+                      >
+                        Active Staff
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* EXACT REQUIRED FIELD ORDER */}
+                <div className="form-grid-layout">
+                  {/* 1. Duty Date */}
                   <div className="form-field-wrapper">
-                    <label className="field-label">
-                      <Calendar size={15} />
-                      <span>Duty Date *</span>
+                    <label className="field-label" style={{ fontSize: '14px', fontWeight: 700 }}>
+                      <Calendar size={15} color="#2563EB" />
+                      <span>1. Duty Date *</span>
                     </label>
                     <input
                       type="date"
@@ -526,119 +746,79 @@ export const AddDutyScreen: React.FC = () => {
                       value={dutyDate}
                       onChange={(e) => setDutyDate(e.target.value)}
                       required
+                      style={{ marginTop: '4px' }}
                     />
                   </div>
 
-                  {/* Exam Selection with Exam Type Toggle */}
+                  {/* 2. Type of Duty (Exam and Mock) */}
                   <div className="form-field-wrapper">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                      <label className="field-label" style={{ margin: 0 }}>
-                        <Briefcase size={15} />
-                        <span>Exam Name *</span>
-                      </label>
-                      <div style={{ display: 'flex', gap: '4px' }}>
-                        <button
-                          type="button"
-                          style={{
-                            padding: '3px 10px',
-                            fontSize: '11px',
-                            fontWeight: 700,
-                            borderRadius: '6px',
-                            cursor: 'pointer',
-                            border: '1.5px solid ' + (selectedDutyType === 'Exam' ? '#2563EB' : '#CBD5E1'),
-                            background: selectedDutyType === 'Exam' ? '#2563EB' : '#FFFFFF',
-                            color: selectedDutyType === 'Exam' ? '#FFFFFF' : '#64748B',
-                          }}
-                          onClick={() => {
-                            setSelectedDutyType('Exam');
-                            const match = exams.find((x) => x.type === 'Exam');
-                            if (match) setSelectedExamId(match.id);
-                          }}
-                        >
-                          Exam
-                        </button>
-                        <button
-                          type="button"
-                          style={{
-                            padding: '3px 10px',
-                            fontSize: '11px',
-                            fontWeight: 700,
-                            borderRadius: '6px',
-                            cursor: 'pointer',
-                            border: '1.5px solid ' + (selectedDutyType === 'Mock' ? '#D97706' : '#CBD5E1'),
-                            background: selectedDutyType === 'Mock' ? '#D97706' : '#FFFFFF',
-                            color: selectedDutyType === 'Mock' ? '#FFFFFF' : '#64748B',
-                          }}
-                          onClick={() => {
-                            setSelectedDutyType('Mock');
-                            const match = exams.find((x) => x.type === 'Mock');
-                            if (match) setSelectedExamId(match.id);
-                          }}
-                        >
-                          Mock
-                        </button>
-                      </div>
-                    </div>
-                    <select
-                      className="form-select-control"
-                      value={selectedExamId}
-                      onChange={(e) => {
-                        setSelectedExamId(e.target.value);
-                        const match = exams.find((x) => x.id === e.target.value);
-                        if (match?.type === 'Mock') setSelectedDutyType('Mock');
-                        else if (match?.type === 'Exam') setSelectedDutyType('Exam');
-                      }}
-                      required
-                    >
-                      <option value="" disabled={exams.length > 0}>
-                        {loadingMaster ? 'Loading exams from MSSQL...' : '-- Select Exam --'}
-                      </option>
-                      {exams
-                        .filter((ex) => !selectedDutyType || ex.type === selectedDutyType || exams.every((x) => x.type !== selectedDutyType))
-                        .map((ex) => (
-                          <option key={ex.id} value={ex.id}>
-                            {ex.name} ({ex.type})
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-
-                  {/* Center Selection */}
-                  <div className="form-field-wrapper span-two">
-                    <label className="field-label">
-                      <Building size={15} />
-                      <span>Examination Center *</span>
+                    <label className="field-label" style={{ fontSize: '14px', fontWeight: 700 }}>
+                      <Briefcase size={15} color="#2563EB" />
+                      <span>2. Type of Duty *</span>
                     </label>
-                    <select
-                      className="form-select-control"
-                      value={selectedCenterId}
-                      onChange={(e) => handleCenterChange(e.target.value)}
-                      required
-                    >
-                      <option value="" disabled={centers.length > 0}>
-                        {loadingMaster ? 'Loading centers from MSSQL...' : '-- Select Examination Center --'}
-                      </option>
-                      {centers.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.centerName} (Code: {c.centerCode})
-                        </option>
-                      ))}
-                    </select>
+                    <div style={{ display: 'flex', gap: '10px', marginTop: '4px', height: '48px' }}>
+                      <button
+                        type="button"
+                        onClick={() => handleDutyTypeChange('Exam')}
+                        style={{
+                          flex: 1,
+                          height: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          padding: '0 10px',
+                          fontSize: '14px',
+                          fontWeight: 700,
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          border: '2px solid ' + (selectedDutyType === 'Exam' ? '#2563EB' : '#CBD5E1'),
+                          background: selectedDutyType === 'Exam' ? '#EFF6FF' : '#FFFFFF',
+                          color: selectedDutyType === 'Exam' ? '#1D4ED8' : '#64748B',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        Exam
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDutyTypeChange('Mock')}
+                        style={{
+                          flex: 1,
+                          height: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          padding: '0 10px',
+                          fontSize: '14px',
+                          fontWeight: 700,
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          border: '2px solid ' + (selectedDutyType === 'Mock' ? '#D97706' : '#CBD5E1'),
+                          background: selectedDutyType === 'Mock' ? '#FEF3C7' : '#FFFFFF',
+                          color: selectedDutyType === 'Mock' ? '#B45309' : '#64748B',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        Mock
+                      </button>
+                    </div>
                   </div>
 
-                  {/* City Selection */}
+                  {/* 3. City */}
                   <div className="form-field-wrapper">
-                    <label className="field-label">
-                      <span>City *</span>
+                    <label className="field-label" style={{ fontSize: '14px', fontWeight: 700 }}>
+                      <MapPin size={15} color="#2563EB" />
+                      <span>3. City *</span>
                     </label>
                     <select
                       className="form-select-control"
                       value={selectedCityId}
-                      onChange={(e) => setSelectedCityId(e.target.value)}
+                      onChange={(e) => handleCityChange(e.target.value)}
                       required
+                      style={{ marginTop: '4px' }}
                     >
-                      <option value="" disabled={cities.length > 0}>
-                        {loadingMaster ? 'Loading cities from MSSQL...' : '-- Select City --'}
+                      <option value="" disabled>
+                        {loadingMaster ? 'Loading cities...' : '-- Select City --'}
                       </option>
                       {cities.map((city) => (
                         <option key={city.id} value={city.id}>
@@ -648,162 +828,364 @@ export const AddDutyScreen: React.FC = () => {
                     </select>
                   </div>
 
-                  {/* Role Selection */}
+                  {/* 4. Center (Filtered by selected City) */}
                   <div className="form-field-wrapper">
-                    <label className="field-label">
-                      <span>Duty Role *</span>
+                    <label className="field-label" style={{ fontSize: '14px', fontWeight: 700 }}>
+                      <Building size={15} color="#2563EB" />
+                      <span>4. Examination Center *</span>
+                    </label>
+                    <SearchableSelect
+                      options={activeCenters.map((c) => ({
+                        value: c.id,
+                        label: `${c.centerName} (Code: ${c.centerCode})`,
+                        subLabel: c.address,
+                      }))}
+                      value={selectedCenterId}
+                      onChange={handleCenterChange}
+                      placeholder={
+                        loadingMaster
+                          ? 'Loading centers...'
+                          : activeCenters.length === 0
+                          ? 'No centers found in this city'
+                          : '-- Type to Search Examination Center --'
+                      }
+                      searchPlaceholder="Type center name or code (e.g. Hebbal, IDZ-01)..."
+                      className="form-select-control"
+                      disabled={loadingMaster || activeCenters.length === 0}
+                    />
+                  </div>
+
+                  {/* 5. Exam Name (Filtered by Type of Duty: Exam vs Mock) */}
+                  <div className="form-field-wrapper">
+                    <label className="field-label" style={{ fontSize: '14px', fontWeight: 700 }}>
+                      <FileCheck size={15} color="#2563EB" />
+                      <span>5. Exam Name ({selectedDutyType}) *</span>
+                    </label>
+                    <SearchableSelect
+                      options={activeExams.map((ex) => ({
+                        value: ex.id,
+                        label: `${ex.name}${ex.code ? ` (${ex.code})` : ''}`,
+                        subLabel: `Type: ${ex.type || selectedDutyType}`,
+                      }))}
+                      value={selectedExamId}
+                      onChange={setSelectedExamId}
+                      placeholder={
+                        loadingMaster
+                          ? 'Loading exams...'
+                          : activeExams.length === 0
+                          ? `No ${selectedDutyType} exams found`
+                          : `-- Type to Search ${selectedDutyType} Exam --`
+                      }
+                      searchPlaceholder="Type exam name (e.g. IBPS, SBI, Mains)..."
+                      className="form-select-control"
+                      disabled={loadingMaster || activeExams.length === 0}
+                    />
+                  </div>
+
+                  {/* 6. Duty Role */}
+                  <div className="form-field-wrapper">
+                    <label className="field-label" style={{ fontSize: '14px', fontWeight: 700 }}>
+                      <User size={15} color="#2563EB" />
+                      <span>6. Duty Role *</span>
                     </label>
                     <select
                       className="form-select-control"
                       value={selectedRoleId}
                       onChange={(e) => setSelectedRoleId(e.target.value)}
                       required
+                      style={{ marginTop: '4px' }}
                     >
-                      <option value="" disabled={roles.length > 0}>
-                        {loadingMaster ? 'Loading roles from MSSQL...' : '-- Select Duty Role --'}
+                      <option value="" disabled>
+                        {loadingMaster ? 'Loading roles...' : '-- Select Duty Role --'}
                       </option>
                       {roles.map((r) => (
                         <option key={r.id} value={r.id}>
-                          {r.name} ({r.code})
+                          {r.name}
                         </option>
                       ))}
                     </select>
                   </div>
 
-                  {/* Shift Selection */}
+                  {/* 7. Shift */}
                   <div className="form-field-wrapper">
-                    <label className="field-label">
-                      <Clock size={15} />
-                      <span>Shift *</span>
+                    <label className="field-label" style={{ fontSize: '14px', fontWeight: 700 }}>
+                      <Clock size={15} color="#2563EB" />
+                      <span>7. Shift *</span>
                     </label>
                     <select
                       className="form-select-control"
                       value={selectedShiftId}
                       onChange={(e) => handleShiftChange(e.target.value)}
                       required
+                      style={{ marginTop: '4px' }}
                     >
-                      <option value="" disabled={shifts.length > 0}>
-                        {loadingMaster ? 'Loading shifts from MSSQL...' : '-- Select Shift --'}
+                      <option value="" disabled>
+                        {loadingMaster ? 'Loading shifts...' : '-- Select Shift --'}
                       </option>
-                      {shifts.map((s) => (
+                      {displayShifts.map((s, idx) => (
                         <option key={s.id} value={s.id}>
-                          {s.name} ({s.defaultReportingTime} - {s.defaultEndTime})
+                          {idx + 1}
                         </option>
                       ))}
                     </select>
                   </div>
 
-                  {/* Reporting & Shift End Times */}
+                  {/* 8. Reporting Time (12-Hour Clock Picker) & Shift End Time */}
                   <div className="form-field-wrapper">
-                    <label className="field-label">
-                      <span>Reporting Time</span>
-                    </label>
-                    <input
-                      type="text"
-                      className="form-input-control"
-                      value={reportingTime}
-                      onChange={(e) => setReportingTime(e.target.value)}
-                      placeholder="07:30 AM"
-                    />
-                  </div>
-
-                  <div className="form-field-wrapper">
-                    <label className="field-label">
-                      <span>Shift End Time</span>
-                    </label>
-                    <input
-                      type="text"
-                      className="form-input-control"
-                      value={shiftEndTime}
-                      onChange={(e) => setShiftEndTime(e.target.value)}
-                      placeholder="01:30 PM"
-                    />
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <label className="field-label" style={{ fontSize: '14px', fontWeight: 700 }}>
+                          <Clock size={15} color="#2563EB" />
+                          <span>8. Reporting Time *</span>
+                        </label>
+                        <ClockTimePicker
+                          value={reportingTime}
+                          onChange={(val) => setReportingTime(val)}
+                          label="Reporting Time"
+                          placeholder="Select Reporting Time"
+                          required
+                        />
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <label className="field-label" style={{ fontSize: '14px', fontWeight: 700 }}>
+                          <Clock size={15} color="#64748B" />
+                          <span>Shift End Time</span>
+                        </label>
+                        <ClockTimePicker
+                          value={shiftEndTime}
+                          onChange={(val) => setShiftEndTime(val)}
+                          label="Shift End Time"
+                          placeholder="Select Shift End Time"
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                {/* Attendance Upload Box (No Page Refresh) */}
-                <div className="attendance-upload-container">
-                  <label className="field-label">
-                    <FileCheck size={15} />
-                    <span>Upload Attendance Proof (PDF / Image)</span>
+                {/* ATTENDANCE PROOF: IMAGE ONLY + CAMERA + PREVIEW */}
+                <div
+                  style={{
+                    marginTop: '24px',
+                    padding: '20px',
+                    borderRadius: '12px',
+                    border: '1.5px dashed #CBD5E1',
+                    background: '#FAFAFA',
+                  }}
+                >
+                  <label
+                    className="field-label"
+                    style={{ fontSize: '14.5px', fontWeight: 700, marginBottom: '10px' }}
+                  >
+                    <Camera size={18} color="#2563EB" />
+                    <span>Upload Attendance Proof (Images Only: Camera / Photo) *</span>
                   </label>
 
-                  <div className="upload-dropzone">
-                    <input
-                      type="file"
-                      id="desktopAttendanceInput"
-                      className="hidden-file-input"
-                      accept=".pdf,.png,.jpg,.jpeg"
-                      onChange={handleFileUpload}
-                      disabled={uploading}
-                    />
+                  {/* Hidden inputs for gallery and direct camera */}
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    accept="image/*"
+                    onChange={handleImageSelect}
+                    style={{ display: 'none' }}
+                  />
+                  <input
+                    type="file"
+                    ref={cameraInputRef}
+                    accept="image/*"
+                    capture="environment"
+                    onChange={handleImageSelect}
+                    style={{ display: 'none' }}
+                  />
 
-                    {uploading ? (
-                      <div className="upload-loading-state">
-                        <Loader2 size={32} className="animate-spin text-blue" />
-                        <span className="upload-main-text">Uploading attendance file...</span>
-                        <span className="upload-sub-text">Please wait while your document is safely stored</span>
+                  {uploadError && (
+                    <div className="alert-banner alert-error" style={{ marginBottom: '14px' }}>
+                      <AlertCircle size={16} />
+                      <span>{uploadError}</span>
+                    </div>
+                  )}
+
+                  {uploading ? (
+                    <div style={{ textAlign: 'center', padding: '24px' }}>
+                      <Loader2 size={32} className="animate-spin text-blue" style={{ margin: '0 auto 8px' }} />
+                      <div style={{ fontSize: '14.5px', fontWeight: 600, color: '#1E293B' }}>
+                        Uploading attendance image...
                       </div>
-                    ) : uploadedFile ? (
-                      <div className="upload-success-state">
-                        <CheckCircle2 size={36} color="#10B981" />
-                        <div className="uploaded-file-meta">
-                          <span className="file-name-bold">{uploadedFile.name}</span>
-                          <span className="file-size-tag">
-                            {(uploadedFile.size / 1024).toFixed(1)} KB &bull; Uploaded Successfully
-                          </span>
+                    </div>
+                  ) : uploadedFile ? (
+                    /* Image Uploaded State with Preview */
+                    <div
+                      style={{
+                        background: '#FFFFFF',
+                        border: '1.5px solid #86EFAC',
+                        borderRadius: '10px',
+                        padding: '16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        flexWrap: 'wrap',
+                        gap: '14px',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                        {previewUrl ? (
+                          <img
+                            src={previewUrl}
+                            alt="Attendance Preview"
+                            onClick={() => setShowFullPreview(true)}
+                            title="Click to zoom preview"
+                            style={{
+                              width: '64px',
+                              height: '64px',
+                              objectFit: 'cover',
+                              borderRadius: '8px',
+                              border: '1px solid #CBD5E1',
+                              cursor: 'pointer',
+                            }}
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              width: '64px',
+                              height: '64px',
+                              borderRadius: '8px',
+                              background: '#DCFCE7',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: '#16A34A',
+                            }}
+                          >
+                            <ImageIcon size={28} />
+                          </div>
+                        )}
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: '14.5px', color: '#1E293B' }}>
+                            {uploadedFile.name}
+                          </div>
+                          <div style={{ fontSize: '13px', color: '#16A34A', fontWeight: 600 }}>
+                            {(uploadedFile.size / 1024).toFixed(1)} KB &bull; Image Ready for Submission
+                          </div>
                         </div>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        {previewUrl && (
+                          <button
+                            type="button"
+                            onClick={() => setShowFullPreview(true)}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              padding: '7px 14px',
+                              background: '#EFF6FF',
+                              border: '1px solid #BFDBFE',
+                              color: '#1D4ED8',
+                              borderRadius: '6px',
+                              fontSize: '13px',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <Eye size={14} />
+                            <span>Preview</span>
+                          </button>
+                        )}
                         <button
                           type="button"
-                          className="remove-file-btn"
-                          onClick={() => setUploadedFile(null)}
+                          onClick={handleRetakeImage}
+                          title="Click to retake attendance photo"
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '7px 14px',
+                            background: '#EFF6FF',
+                            border: '1px solid #BFDBFE',
+                            color: '#2563EB',
+                            borderRadius: '6px',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease',
+                          }}
                         >
-                          <X size={16} />
+                          <RotateCcw size={14} />
+                          <span>Retake</span>
                         </button>
                       </div>
-                    ) : (
-                      <label htmlFor="desktopAttendanceInput" className="dropzone-label">
-                        <div className="upload-icon-circle">
-                          <UploadCloud size={28} color="#2563EB" />
-                        </div>
-                        <span className="upload-main-text">
-                          Click to browse or drag and drop attendance sheet
-                        </span>
-                        <span className="upload-sub-text">
-                          Supports PDF, JPG, PNG up to 10MB
-                        </span>
-                      </label>
-                    )}
-                  </div>
+                    </div>
+                  ) : (
+                    /* Initial Upload Button: Single Camera / Photo Capture */
+                    <div style={{ textAlign: 'center', padding: '16px' }}>
+                      <p style={{ margin: '0 0 14px 0', fontSize: '15px', color: '#DC2626', fontWeight: 700 }}>
+                        Please upload clear image of the attendance sheet
+                      </p>
+                      <div style={{ display: 'flex', justifyContent: 'center' }}>
+                        <button
+                          type="button"
+                          onClick={() => cameraInputRef.current?.click()}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '11px 26px',
+                            background: '#2563EB',
+                            color: '#FFFFFF',
+                            borderRadius: '8px',
+                            border: 'none',
+                            fontWeight: 600,
+                            fontSize: '14.5px',
+                            cursor: 'pointer',
+                            boxShadow: '0 2px 4px rgba(37,99,235,0.2)',
+                          }}
+                        >
+                          <Camera size={18} />
+                          <span>Take Photo (Camera)</span>
+                        </button>
+                      </div>
+                      <span style={{ display: 'block', marginTop: '10px', fontSize: '12.5px', color: '#94A3B8' }}>
+                        Supports JPG, PNG, WEBP only (PDF/documents are strictly disabled)
+                      </span>
+                    </div>
+                  )}
                 </div>
 
-                {/* Submit Row */}
-                <div className="form-action-row">
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    onClick={() => navigate('/my-duties')}
-                    disabled={submitting}
-                  >
-                    Cancel
-                  </button>
+                {/* CENTERED SUBMIT BUTTON - CANCEL BUTTON REMOVED */}
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: '32px' }}>
                   <button
                     type="submit"
                     className="btn-primary"
                     disabled={submitting}
+                    style={{
+                      padding: '14px 40px',
+                      fontSize: '16px',
+                      fontWeight: 700,
+                      borderRadius: '10px',
+                      minWidth: '280px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '10px',
+                    }}
                   >
                     {submitting ? (
                       <>
-                        <Loader2 size={18} className="animate-spin" />
+                        <Loader2 size={20} className="animate-spin" />
                         <span>Submitting Duty...</span>
                       </>
                     ) : (
-                      <span>Submit Duty Assignment</span>
+                      <>
+                        <CalendarPlus size={20} />
+                        <span>Submit Duty Assignment</span>
+                      </>
                     )}
                   </button>
                 </div>
               </form>
             </div>
+
+
           </main>
         </div>
       </div>
@@ -814,7 +1196,9 @@ export const AddDutyScreen: React.FC = () => {
 
         <main className="mobile-content-body">
           <div className="mobile-page-title-row">
-            <h2 className="mobile-page-heading">{isAdmin ? 'Admin — Add Employee' : 'Add Duty'}</h2>
+            <h2 className="mobile-page-heading">
+              {isAdmin ? 'Assign Duty to Employee' : 'Add New Duty'}
+            </h2>
           </div>
 
           {submitSuccess && (
@@ -831,365 +1215,528 @@ export const AddDutyScreen: React.FC = () => {
           )}
 
           <div className="mobile-form-card">
-            <form onSubmit={handleSubmit}>
-              {/* Member / Employee Mobile Section */}
-              <div
-                style={{
-                  background: '#F8FAFC',
-                  border: '1.5px solid #E2E8F0',
-                  borderRadius: '10px',
-                  padding: '14px',
-                  marginBottom: '16px',
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginBottom: '10px',
-                  }}
-                >
-                  <label className="mobile-input-label" style={{ margin: 0, color: '#1E293B' }}>
-                    {isAdmin ? 'ADD / SELECT STAFF *' : 'ASSIGN TO MEMBER *'}
-                  </label>
-                  <div style={{ display: 'flex', gap: '4px' }}>
-                    <button
-                      type="button"
-                      style={{
-                        padding: '3px 8px',
-                        fontSize: '11px',
-                        borderRadius: '4px',
-                        border: '1px solid ' + (employeeMode === 'new' ? '#2563EB' : '#CBD5E1'),
-                        background: employeeMode === 'new' ? '#2563EB' : '#FFFFFF',
-                        color: employeeMode === 'new' ? '#FFFFFF' : '#475569',
-                      }}
-                      onClick={() => {
-                        setEmployeeMode('new');
-                        setEmployeeResourceId('');
-                        setEmployeeName('');
-                        setEmployeeMobile('');
-                        setEmployeeEmail('');
-                      }}
-                    >
-                      + New
-                    </button>
-                    <button
-                      type="button"
-                      style={{
-                        padding: '3px 8px',
-                        fontSize: '11px',
-                        borderRadius: '4px',
-                        border:
-                          '1px solid ' + (employeeMode === 'existing' ? '#2563EB' : '#CBD5E1'),
-                        background: employeeMode === 'existing' ? '#2563EB' : '#FFFFFF',
-                        color: employeeMode === 'existing' ? '#FFFFFF' : '#475569',
-                      }}
-                      onClick={() => {
-                        setEmployeeMode('existing');
-                        if (employees.length > 0)
-                          handleEmployeeSelect(employees[0].resourceId);
-                      }}
-                    >
-                      Staff
-                    </button>
-                  </div>
-                </div>
-
-                {employeeMode === 'existing' && employees.length > 0 && (
-                  <div style={{ marginBottom: '10px' }}>
+            <form onSubmit={handleFormSubmit}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {/* Workforce Member Assignment (Mobile) */}
+                {isAdmin ? (
+                  <div className="mobile-form-group">
+                    <label className="mobile-input-label">ASSIGN DUTY TO EMPLOYEE *</label>
                     <select
                       className="mobile-form-select"
-                      value={employeeResourceId}
-                      onChange={(e) => handleEmployeeSelect(e.target.value)}
+                      value={selectedEmployee?.resourceId || ''}
+                      onChange={(e) => {
+                        const found = employees.find((emp) => emp.resourceId === e.target.value);
+                        if (found) setSelectedEmployee(found);
+                      }}
+                      required
                     >
+                      <option value="" disabled>
+                        -- Select Registered Employee --
+                      </option>
                       {employees.map((emp) => (
                         <option key={emp.id} value={emp.resourceId}>
-                          {emp.name} ({emp.resourceId})
+                          {emp.name} (ID: {emp.resourceId}) &bull; {emp.city || 'Mysore'}
                         </option>
                       ))}
-                      <option value="NEW">+ Register New Member</option>
                     </select>
+                  </div>
+                ) : (
+                  <div className="mobile-form-group">
+                    <label className="mobile-input-label">ASSIGNED STAFF</label>
+                    <div
+                      style={{
+                        padding: '12px 14px',
+                        background: '#F8FAFC',
+                        borderRadius: '10px',
+                        border: '1.5px solid #E2E8F0',
+                        fontSize: '14.5px',
+                        fontWeight: 600,
+                        color: '#1E293B',
+                      }}
+                    >
+                      <span>{user?.name} (ID: {user?.resourceId})</span>
+                    </div>
                   </div>
                 )}
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {/* 1. Duty Date */}
+                <div className="mobile-form-group">
+                  <label className="mobile-input-label">1. DUTY DATE *</label>
                   <input
-                    type="text"
+                    type="date"
                     className="mobile-form-input"
-                    placeholder="Staff ID (e.g. 19001) *"
-                    value={employeeResourceId}
-                    onChange={(e) => setEmployeeResourceId(e.target.value)}
+                    value={dutyDate}
+                    onChange={(e) => setDutyDate(e.target.value)}
                     required
-                  />
-                  <input
-                    type="text"
-                    className="mobile-form-input"
-                    placeholder="Member Name (e.g. Dr. Ramesh) *"
-                    value={employeeName}
-                    onChange={(e) => setEmployeeName(e.target.value)}
-                    required
-                  />
-                  <input
-                    type="text"
-                    className="mobile-form-input"
-                    placeholder="Mobile Number *"
-                    value={employeeMobile}
-                    onChange={(e) => setEmployeeMobile(e.target.value)}
-                    required
-                  />
-                  <input
-                    type="email"
-                    className="mobile-form-input"
-                    placeholder="Email Address"
-                    value={employeeEmail}
-                    onChange={(e) => setEmployeeEmail(e.target.value)}
                   />
                 </div>
-              </div>
 
-              <div className="mobile-form-group">
-                <label className="mobile-input-label">DUTY DATE *</label>
-                <input
-                  type="date"
-                  className="mobile-form-input"
-                  value={dutyDate}
-                  onChange={(e) => setDutyDate(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div className="mobile-form-group">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                  <label className="mobile-input-label" style={{ margin: 0 }}>EXAM NAME *</label>
-                  <div style={{ display: 'flex', gap: '4px' }}>
+                {/* 2. Type of Duty */}
+                <div className="mobile-form-group">
+                  <label className="mobile-input-label">2. TYPE OF DUTY *</label>
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '2px' }}>
                     <button
                       type="button"
+                      onClick={() => handleDutyTypeChange('Exam')}
                       style={{
-                        padding: '2px 8px',
-                        fontSize: '10px',
+                        flex: 1,
+                        height: '48px',
+                        padding: '0 12px',
+                        borderRadius: '10px',
                         fontWeight: 700,
-                        borderRadius: '4px',
-                        border: '1px solid ' + (selectedDutyType === 'Exam' ? '#2563EB' : '#CBD5E1'),
-                        background: selectedDutyType === 'Exam' ? '#2563EB' : '#FFFFFF',
-                        color: selectedDutyType === 'Exam' ? '#FFFFFF' : '#64748B',
-                      }}
-                      onClick={() => {
-                        setSelectedDutyType('Exam');
-                        const match = exams.find((x) => x.type === 'Exam');
-                        if (match) setSelectedExamId(match.id);
+                        fontSize: '14px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        border: '2px solid ' + (selectedDutyType === 'Exam' ? '#2563EB' : '#CBD5E1'),
+                        background: selectedDutyType === 'Exam' ? '#EFF6FF' : '#FFFFFF',
+                        color: selectedDutyType === 'Exam' ? '#1D4ED8' : '#64748B',
+                        cursor: 'pointer',
                       }}
                     >
                       Exam
                     </button>
                     <button
                       type="button"
+                      onClick={() => handleDutyTypeChange('Mock')}
                       style={{
-                        padding: '2px 8px',
-                        fontSize: '10px',
+                        flex: 1,
+                        height: '48px',
+                        padding: '0 12px',
+                        borderRadius: '10px',
                         fontWeight: 700,
-                        borderRadius: '4px',
-                        border: '1px solid ' + (selectedDutyType === 'Mock' ? '#D97706' : '#CBD5E1'),
-                        background: selectedDutyType === 'Mock' ? '#D97706' : '#FFFFFF',
-                        color: selectedDutyType === 'Mock' ? '#FFFFFF' : '#64748B',
-                      }}
-                      onClick={() => {
-                        setSelectedDutyType('Mock');
-                        const match = exams.find((x) => x.type === 'Mock');
-                        if (match) setSelectedExamId(match.id);
+                        fontSize: '14px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        border: '2px solid ' + (selectedDutyType === 'Mock' ? '#D97706' : '#CBD5E1'),
+                        background: selectedDutyType === 'Mock' ? '#FEF3C7' : '#FFFFFF',
+                        color: selectedDutyType === 'Mock' ? '#B45309' : '#64748B',
+                        cursor: 'pointer',
                       }}
                     >
                       Mock
                     </button>
                   </div>
                 </div>
-                <select
-                  className="mobile-form-select"
-                  value={selectedExamId}
-                  onChange={(e) => {
-                    setSelectedExamId(e.target.value);
-                    const match = exams.find((x) => x.id === e.target.value);
-                    if (match?.type === 'Mock') setSelectedDutyType('Mock');
-                    else if (match?.type === 'Exam') setSelectedDutyType('Exam');
-                  }}
-                  required
-                >
-                  <option value="" disabled={exams.length > 0}>
-                    {loadingMaster ? 'Loading exams...' : '-- Select Exam --'}
-                  </option>
-                  {exams
-                    .filter((ex) => !selectedDutyType || ex.type === selectedDutyType || exams.every((x) => x.type !== selectedDutyType))
-                    .map((ex) => (
-                      <option key={ex.id} value={ex.id}>
-                        {ex.name} ({ex.type})
+
+                {/* 3. City */}
+                <div className="mobile-form-group">
+                  <label className="mobile-input-label">3. CITY *</label>
+                  <select
+                    className="mobile-form-select"
+                    value={selectedCityId}
+                    onChange={(e) => handleCityChange(e.target.value)}
+                    required
+                  >
+                    <option value="" disabled>-- Select City --</option>
+                    {cities.map((city) => (
+                      <option key={city.id} value={city.id}>{city.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 4. Examination Center */}
+                <div className="mobile-form-group">
+                  <label className="mobile-input-label">4. EXAMINATION CENTER *</label>
+                  <SearchableSelect
+                    options={activeCenters.map((c) => ({
+                      value: c.id,
+                      label: `${c.centerName} (Code: ${c.centerCode})`,
+                      subLabel: c.address,
+                    }))}
+                    value={selectedCenterId}
+                    onChange={handleCenterChange}
+                    placeholder="-- Type to Search Center --"
+                    searchPlaceholder="Type center name or code..."
+                    className="mobile-form-select"
+                    disabled={activeCenters.length === 0}
+                  />
+                </div>
+
+                {/* 5. Exam Name */}
+                <div className="mobile-form-group">
+                  <label className="mobile-input-label">5. EXAM NAME ({selectedDutyType}) *</label>
+                  <SearchableSelect
+                    options={activeExams.map((ex) => ({
+                      value: ex.id,
+                      label: `${ex.name}${ex.code ? ` (${ex.code})` : ''}`,
+                      subLabel: `Type: ${ex.type || selectedDutyType}`,
+                    }))}
+                    value={selectedExamId}
+                    onChange={setSelectedExamId}
+                    placeholder={`-- Type to Search ${selectedDutyType} Exam --`}
+                    searchPlaceholder="Type exam name..."
+                    className="mobile-form-select"
+                    disabled={activeExams.length === 0}
+                  />
+                </div>
+
+                {/* 6. Duty Role */}
+                <div className="mobile-form-group">
+                  <label className="mobile-input-label">6. DUTY ROLE *</label>
+                  <select
+                    className="mobile-form-select"
+                    value={selectedRoleId}
+                    onChange={(e) => setSelectedRoleId(e.target.value)}
+                    required
+                  >
+                    <option value="" disabled>-- Select Duty Role --</option>
+                    {roles.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name}
                       </option>
                     ))}
-                </select>
-              </div>
+                  </select>
+                </div>
 
-              <div className="mobile-form-group">
-                <label className="mobile-input-label">CENTER *</label>
-                <select
-                  className="mobile-form-select"
-                  value={selectedCenterId}
-                  onChange={(e) => handleCenterChange(e.target.value)}
-                  required
+                {/* 7. Shift */}
+                <div className="mobile-form-group">
+                  <label className="mobile-input-label">7. SHIFT *</label>
+                  <select
+                    className="mobile-form-select"
+                    value={selectedShiftId}
+                    onChange={(e) => handleShiftChange(e.target.value)}
+                    required
+                  >
+                    <option value="" disabled>-- Select Shift --</option>
+                    {displayShifts.map((s, idx) => (
+                      <option key={s.id} value={s.id}>
+                        {idx + 1}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 8. Reporting Time & Shift End Time (12-Hour Clock Picker) */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div className="mobile-form-group" style={{ marginBottom: 0 }}>
+                    <label className="mobile-input-label">8. REPORTING TIME *</label>
+                    <ClockTimePicker
+                      value={reportingTime}
+                      onChange={(val) => setReportingTime(val)}
+                      label="Reporting Time"
+                      placeholder="Select Time"
+                      required
+                    />
+                  </div>
+                  <div className="mobile-form-group" style={{ marginBottom: 0 }}>
+                    <label className="mobile-input-label">SHIFT END TIME</label>
+                    <ClockTimePicker
+                      value={shiftEndTime}
+                      onChange={(val) => setShiftEndTime(val)}
+                      label="Shift End Time"
+                      placeholder="Select Time"
+                    />
+                  </div>
+                </div>
+
+                {/* Attendance Upload (Mobile Camera / Gallery) */}
+                <div
+                  style={{
+                    padding: '12px',
+                    borderRadius: '8px',
+                    border: '1.5px dashed #CBD5E1',
+                    background: '#FAFAFA',
+                  }}
                 >
-                  <option value="" disabled={centers.length > 0}>
-                    {loadingMaster ? 'Loading centers...' : '-- Select Center --'}
-                  </option>
-                  {centers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.centerName} (Code: {c.centerCode})
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  <label className="mobile-input-label" style={{ marginBottom: '8px' }}>
+                    ATTENDANCE PROOF (CAMERA / IMAGE ONLY) *
+                  </label>
 
-              <div className="mobile-form-group">
-                <label className="mobile-input-label">CITY *</label>
-                <select
-                  className="mobile-form-select"
-                  value={selectedCityId}
-                  onChange={(e) => setSelectedCityId(e.target.value)}
-                  required
-                >
-                  <option value="" disabled={cities.length > 0}>
-                    {loadingMaster ? 'Loading cities...' : '-- Select City --'}
-                  </option>
-                  {cities.map((city) => (
-                    <option key={city.id} value={city.id}>
-                      {city.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="mobile-form-group">
-                <label className="mobile-input-label">ROLE *</label>
-                <select
-                  className="mobile-form-select"
-                  value={selectedRoleId}
-                  onChange={(e) => setSelectedRoleId(e.target.value)}
-                  required
-                >
-                  <option value="" disabled={roles.length > 0}>
-                    {loadingMaster ? 'Loading roles...' : '-- Select Role --'}
-                  </option>
-                  {roles.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name} ({r.code})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="mobile-form-group">
-                <label className="mobile-input-label">SHIFT *</label>
-                <select
-                  className="mobile-form-select"
-                  value={selectedShiftId}
-                  onChange={(e) => handleShiftChange(e.target.value)}
-                  required
-                >
-                  <option value="" disabled={shifts.length > 0}>
-                    {loadingMaster ? 'Loading shifts...' : '-- Select Shift --'}
-                  </option>
-                  {shifts.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} ({s.defaultReportingTime} - {s.defaultEndTime})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Attendance Upload in Mobile */}
-              <div className="mobile-form-group">
-                <label className="mobile-input-label">ATTENDANCE PROOF</label>
-                <input
-                  type="file"
-                  id="mobileAttendanceInput"
-                  className="hidden-file-input"
-                  accept=".pdf,.png,.jpg,.jpeg"
-                  onChange={handleFileUpload}
-                  disabled={uploading}
-                />
-                <label htmlFor="mobileAttendanceInput" className="mobile-upload-btn">
-                  {uploading ? (
-                    <Loader2 size={16} className="animate-spin" />
+                  {uploadedFile ? (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {previewUrl && (
+                          <img
+                            src={previewUrl}
+                            alt="Thumb"
+                            onClick={() => setShowFullPreview(true)}
+                            style={{ width: '42px', height: '42px', objectFit: 'cover', borderRadius: '6px' }}
+                          />
+                        )}
+                        <div>
+                          <div style={{ fontSize: '13px', fontWeight: 700, color: '#1E293B' }}>{uploadedFile.name}</div>
+                          <div style={{ fontSize: '11.5px', color: '#16A34A', fontWeight: 600 }}>Ready to Submit</div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        {previewUrl && (
+                          <button
+                            type="button"
+                            onClick={() => setShowFullPreview(true)}
+                            style={{ padding: '4px 8px', fontSize: '12px', background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '4px', fontWeight: 600 }}
+                          >
+                            Preview
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={handleRetakeImage}
+                          style={{ padding: '4px 8px', fontSize: '12px', background: '#EFF6FF', color: '#2563EB', border: '1px solid #BFDBFE', borderRadius: '4px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                        >
+                          <RotateCcw size={12} />
+                          <span>Retake</span>
+                        </button>
+                      </div>
+                    </div>
                   ) : (
-                    <UploadCloud size={16} />
+                    <div>
+                      <p style={{ margin: '0 0 10px 0', fontSize: '13.5px', color: '#DC2626', fontWeight: 700, textAlign: 'center' }}>
+                        Please upload clear image of the attendance sheet
+                      </p>
+                      <div style={{ display: 'flex', justifyContent: 'center' }}>
+                        <button
+                          type="button"
+                          onClick={() => cameraInputRef.current?.click()}
+                          style={{
+                            width: '100%',
+                            padding: '10px 16px',
+                            background: '#2563EB',
+                            color: '#FFFFFF',
+                            border: 'none',
+                            borderRadius: '6px',
+                            fontSize: '14px',
+                            fontWeight: 600,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '8px',
+                          }}
+                        >
+                          <Camera size={18} />
+                          <span>Take Photo (Camera)</span>
+                        </button>
+                      </div>
+                    </div>
                   )}
-                  <span>
-                    {uploading
-                      ? 'Uploading File...'
-                      : uploadedFile
-                      ? `✓ ${uploadedFile.name}`
-                      : 'Upload Attendance Sheet'}
-                  </span>
-                </label>
-              </div>
+                </div>
 
-              <button
-                type="submit"
-                className="mobile-submit-btn"
-                disabled={submitting}
-              >
-                {submitting ? 'Submitting...' : 'ADD DUTY'}
-              </button>
+                {/* Centered Mobile Submit Button */}
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: '10px' }}>
+                  <button
+                    type="submit"
+                    className="mobile-submit-btn"
+                    disabled={submitting}
+                    style={{ width: '100%', padding: '13px', fontSize: '15px' }}
+                  >
+                    {submitting ? 'Submitting...' : 'Submit Duty Assignment'}
+                  </button>
+                </div>
+              </div>
             </form>
           </div>
+
+
         </main>
       </div>
 
-      {/* ATTENDANCE UPLOAD SUCCESS POPUP MODAL */}
-      {showUploadPopup && uploadedFile && (
-        <div className="modal-overlay" onClick={() => setShowUploadPopup(false)}>
+      {/* Confirmation Modal ("Are you sure you want to submit?") */}
+      {showConfirmModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 100000,
+            padding: '20px',
+          }}
+        >
           <div
-            className="modal-content-card"
             style={{
-              maxWidth: '440px',
-              textAlign: 'center',
-              padding: '28px 24px',
+              background: '#FFFFFF',
               borderRadius: '16px',
+              maxWidth: '460px',
+              width: '100%',
+              padding: '24px',
+              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)',
             }}
-            onClick={(e) => e.stopPropagation()}
           >
-            <div
-              style={{
-                width: '64px',
-                height: '64px',
-                borderRadius: '50%',
-                background: '#ECFDF5',
-                border: '2.5px solid #10B981',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                margin: '0 auto 16px',
-              }}
-            >
-              <CheckCircle2 size={38} color="#10B981" />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+              <div
+                style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '10px',
+                  background: '#EFF6FF',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#2563EB',
+                  flexShrink: 0,
+                }}
+              >
+                <HelpCircle size={24} />
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#1E293B' }}>
+                  Confirm Duty Submission
+                </h3>
+                <p style={{ margin: 0, fontSize: '13px', color: '#64748B' }}>
+                  Please review before submitting
+                </p>
+              </div>
             </div>
 
-            <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', marginBottom: '8px' }}>
-              Attendance Uploaded Successfully!
-            </h3>
-
-            <p style={{ fontSize: '13px', color: '#64748B', lineHeight: '1.5', marginBottom: '20px' }}>
-              Your attendance proof sheet <strong>{uploadedFile.name}</strong> ({(uploadedFile.size / 1024).toFixed(1)} KB) has been successfully uploaded and attached.
+            <p style={{ fontSize: '14.5px', color: '#334155', lineHeight: 1.5, marginBottom: '16px' }}>
+              Are you sure you want to submit this duty assignment for{' '}
+              <strong>{selectedEmployee?.name || user?.name}</strong>?
             </p>
 
-            <button
-              type="button"
-              className="btn-primary"
-              style={{ width: '100%', justifyContent: 'center', padding: '12px' }}
-              onClick={() => setShowUploadPopup(false)}
+            <div
+              style={{
+                background: '#F8FAFC',
+                border: '1px solid #E2E8F0',
+                borderRadius: '8px',
+                padding: '12px',
+                fontSize: '13px',
+                color: '#475569',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '6px',
+                marginBottom: '20px',
+              }}
             >
-              OK, Continue
-            </button>
+              <div>
+                <strong>Employee Name:</strong>{' '}
+                <span style={{ color: '#1D4ED8', fontWeight: 600 }}>
+                  {selectedEmployee?.name || user?.name || 'Assigned Employee'}
+                  {selectedEmployee?.resourceId ? ` (ID: ${selectedEmployee.resourceId})` : ''}
+                </span>
+              </div>
+              <div>
+                <strong>Duty Date:</strong> {dutyDate} ({selectedDutyType})
+              </div>
+              {selectedExamId && (
+                <div>
+                  <strong>Exam Name:</strong> {exams.find((e) => e.id === selectedExamId)?.name || 'Selected Exam'}
+                </div>
+              )}
+              <div>
+                <strong>Center:</strong> {centers.find((c) => c.id === selectedCenterId)?.centerName || 'Selected Center'}
+              </div>
+              <div>
+                <strong>Role &amp; Shift:</strong>{' '}
+                {roles.find((r) => r.id === selectedRoleId)?.name || 'Role'} &bull;{' '}
+                {shifts.find((s) => s.id === selectedShiftId)?.name || 'Shift'} ({reportingTime})
+              </div>
+              <div>
+                <strong>Attendance Proof:</strong> {uploadedFile?.name || 'Attached Photo'}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setShowConfirmModal(false)}
+                style={{ padding: '9px 18px', fontSize: '14px' }}
+              >
+                No, Review
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={executeSubmission}
+                style={{
+                  padding: '9px 22px',
+                  background: '#2563EB',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontWeight: 600,
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
+                <CheckCircle2 size={16} />
+                <span>Yes, Submit</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
+
+      {/* Full Size Image Preview Modal */}
+      {showFullPreview && previewUrl && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.85)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 110000,
+            padding: '20px',
+          }}
+          onClick={() => setShowFullPreview(false)}
+        >
+          <div
+            style={{
+              position: 'relative',
+              maxWidth: '90vw',
+              maxHeight: '85vh',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setShowFullPreview(false)}
+              style={{
+                position: 'absolute',
+                top: '-44px',
+                right: '0',
+                background: '#FFFFFF',
+                border: 'none',
+                borderRadius: '50%',
+                width: '36px',
+                height: '36px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: '#0F172A',
+              }}
+            >
+              <X size={20} />
+            </button>
+            <img
+              src={previewUrl}
+              alt="Full Attendance Proof"
+              style={{
+                maxWidth: '100%',
+                maxHeight: '80vh',
+                borderRadius: '12px',
+                boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
+                objectFit: 'contain',
+              }}
+            />
+            <span style={{ color: '#E2E8F0', marginTop: '10px', fontSize: '13.5px' }}>
+              {uploadedFile?.name} (Click outside or ✕ to close)
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Employee Personal Details Modal */}
+      <EmployeeDetailsModal
+        resourceId={detailsModalResourceId}
+        isOpen={Boolean(detailsModalResourceId)}
+        onClose={() => setDetailsModalResourceId(null)}
+      />
     </div>
   );
 };

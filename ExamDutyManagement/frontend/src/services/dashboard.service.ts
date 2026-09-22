@@ -44,13 +44,17 @@ export interface EmployeeDashboardData {
     status: string;
   };
   stats: DashboardStats;
+  selectedYear?: number;
+  availableYears?: number[];
   monthlyOverview: MonthlyOverviewItem[];
   recentDuties: RecentDutySummary[];
 }
 
 export const dashboardService = {
-  async getEmployeeDashboard(resourceId?: string): Promise<EmployeeDashboardData> {
-    const params = resourceId ? { resourceId } : undefined;
+  async getEmployeeDashboard(resourceId?: string, year?: number): Promise<EmployeeDashboardData> {
+    const params: Record<string, any> = {};
+    if (resourceId) params.resourceId = resourceId;
+    if (year) params.year = year;
     const res = await apiClient.get<EmployeeDashboardData>('/dashboard/employee', {
       params,
     });

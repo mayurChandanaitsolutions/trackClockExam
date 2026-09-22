@@ -41,6 +41,9 @@ export interface EmployeeItem {
   name: string;
   mobile: string;
   email?: string;
+  aadhaarNumber?: string;
+  panNumber?: string;
+  isIdentityVerified?: boolean;
   city?: string;
   status: string;
   role?: string;
@@ -76,6 +79,46 @@ export const masterService = {
 
   async getEmployees(): Promise<EmployeeItem[]> {
     const res = await apiClient.get<EmployeeItem[]>('/employees');
+    return res.data;
+  },
+
+  async getEmployeeByResourceId(resourceId: string): Promise<EmployeeItem> {
+    const res = await apiClient.get<EmployeeItem>(`/employees/${encodeURIComponent(resourceId)}`);
+    return res.data;
+  },
+
+  async createEmployee(data: {
+    resourceId: string;
+    name: string;
+    mobile: string;
+    email?: string;
+    aadhaarNumber?: string;
+    panNumber?: string;
+    isIdentityVerified?: boolean;
+    city?: string;
+  }): Promise<EmployeeItem> {
+    const res = await apiClient.post<EmployeeItem>('/employees', data);
+    return res.data;
+  },
+
+  async updateEmployee(
+    resourceId: string,
+    data: {
+      name?: string;
+      mobile?: string;
+      email?: string;
+      aadhaarNumber?: string;
+      panNumber?: string;
+      isIdentityVerified?: boolean;
+      city?: string;
+    },
+  ): Promise<EmployeeItem> {
+    const res = await apiClient.put<EmployeeItem>(`/employees/${encodeURIComponent(resourceId)}`, data);
+    return res.data;
+  },
+
+  async deleteEmployee(resourceId: string): Promise<{ message: string }> {
+    const res = await apiClient.delete<{ message: string }>(`/employees/${encodeURIComponent(resourceId)}`);
     return res.data;
   },
 };

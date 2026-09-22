@@ -10,6 +10,9 @@ export interface EmployeeProfile {
   status: string;
   role?: 'admin' | 'employee';
   isAdmin?: boolean;
+  aadhaarNumber?: string;
+  panNumber?: string;
+  isIdentityVerified?: boolean;
 }
 
 export interface LoginResponse {

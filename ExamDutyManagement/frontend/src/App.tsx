@@ -6,6 +6,8 @@ import DashboardScreen from './pages/DashboardScreen';
 import AddDutyScreen from './pages/AddDutyScreen';
 import MyDutiesScreen from './pages/MyDutiesScreen';
 import ProfileScreen from './pages/ProfileScreen';
+import AddEmployeeScreen from './pages/AddEmployeeScreen';
+import IdentityVerificationScreen from './pages/IdentityVerificationScreen';
 import BottomNav from './components/BottomNav';
 import './styles/App.css';
 
@@ -13,10 +15,11 @@ import './styles/App.css';
 const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
 
-  // Hide bottom nav on splash and login screens
+  // Hide bottom nav on splash, login, and identity verification screens
   const isSplash = location.pathname === '/';
   const isLogin = location.pathname === '/login';
-  const showNav = !isSplash && !isLogin;
+  const isVerify = location.pathname === '/verify-identity';
+  const showNav = !isSplash && !isLogin && !isVerify;
 
   return (
     <div className={`app-container ${isLogin ? 'login-page-container' : ''}`}>
@@ -39,7 +42,9 @@ export const App: React.FC = () => {
         <Routes>
           <Route path="/" element={<SplashScreen />} />
           <Route path="/login" element={<LoginScreen />} />
+          <Route path="/verify-identity" element={<IdentityVerificationScreen />} />
           <Route path="/dashboard" element={<DashboardScreen />} />
+          <Route path="/add-employee" element={<AddEmployeeScreen />} />
           <Route path="/add-duty" element={<AddDutyScreen />} />
           <Route path="/my-duties" element={<MyDutiesScreen />} />
           <Route path="/profile" element={<ProfileScreen />} />

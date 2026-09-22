@@ -1,13 +1,17 @@
 import {
   Controller,
+  Get,
   Post,
+  Res,
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  NotFoundException,
   Param,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
+import * as path from 'path';
 import { extname } from 'path';
 import * as fs from 'fs';
 import { AttendanceService } from './attendance.service';
@@ -102,5 +106,58 @@ export class AttendanceController {
         size: savedFile.size,
       },
     };
+  }
+
+  @Get('attendance/file/:id')
+  async getAttendanceFile(@Param('id') id: string, @Res() res: any) {
+    let file = await this.attendanceService.getFileById(id);
+    if (!file) {
+      file = await this.attendanceService.getFileByFileName(id);
+    }
+    if (!file) {
+      // Check if this id matches a physical file name in uploads
+      const directPath = path.join(uploadDir, path.basename(id));
+      if (fs.existsSync(directPath)) {
+        const ext = path.extname(id).toLowerCase();
+        const mime =
+          ext === '.png'
+            ? 'image/png'
+            : ext === '.jpg' || ext === '.jpeg'
+            ? 'image/jpeg'
+            : 'application/pdf';
+        res.setHeader('Content-Type', mime);
+        res.setHeader('Content-Disposition', `inline; filename="${path.basename(id)}"`);
+        return fs.createReadStream(directPath).pipe(res);
+      }
+      throw new NotFoundException('Attendance file not found');
+    }
+
+    const filePath = path.resolve(file.filePath);
+    if (!fs.existsSync(filePath)) {
+      throw new NotFoundException('File on disk not found');
+    }
+
+    res.setHeader('Content-Type', file.mimeType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${file.originalName}"`);
+    fs.createReadStream(filePath).pipe(res);
+  }
+
+  @Get('attendance/view-by-name/:fileName')
+  async viewByFileName(@Param('fileName') fileName: string, @Res() res: any) {
+    const safeName = path.basename(fileName);
+    const filePath = path.join(uploadDir, safeName);
+    if (!fs.existsSync(filePath)) {
+      throw new NotFoundException('File not found');
+    }
+    const ext = path.extname(safeName).toLowerCase();
+    const mime =
+      ext === '.png'
+        ? 'image/png'
+        : ext === '.jpg' || ext === '.jpeg'
+        ? 'image/jpeg'
+        : 'application/pdf';
+    res.setHeader('Content-Type', mime);
+    res.setHeader('Content-Disposition', `inline; filename="${safeName}"`);
+    fs.createReadStream(filePath).pipe(res);
   }
 }

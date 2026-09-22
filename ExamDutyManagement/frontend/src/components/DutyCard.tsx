@@ -7,28 +7,12 @@ interface DutyCardProps {
 }
 
 export const DutyCard: React.FC<DutyCardProps> = ({ duty }) => {
-  const getStatusClass = (status: Duty['status']) => {
-    switch (status) {
-      case 'Approved':
-        return 'approved';
-      case 'Pending':
-        return 'pending';
-      case 'Rejected':
-        return 'rejected';
-      default:
-        return '';
-    }
-  };
-
   return (
     <div className="duty-card">
-      {/* Primary Column: Exam, Status & Date */}
+      {/* Primary Column: Exam & Date */}
       <div className="duty-primary-info">
         <div className="duty-exam-name">
           <span>{duty.exam}</span>
-          <span className={`duty-status-badge ${getStatusClass(duty.status)}`}>
-            {duty.status}
-          </span>
         </div>
         <div className="duty-date-tag">
           <Calendar size={13} />

@@ -23,8 +23,17 @@ export class Employee {
   @Column({ type: 'nvarchar', length: 150, nullable: true })
   email?: string;
 
+  @Column({ type: 'nvarchar', length: 20, nullable: true })
+  aadhaarNumber?: string;
+
+  @Column({ type: 'nvarchar', length: 20, nullable: true })
+  panNumber?: string;
+
   @Column({ type: 'nvarchar', length: 100, nullable: true })
   city?: string;
+
+  @Column({ type: 'bit', default: false, nullable: true })
+  isIdentityVerified?: boolean;
 
   @Column({ default: 'Active', length: 20 })
   status!: string;

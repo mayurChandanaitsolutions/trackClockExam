@@ -1,6 +1,6 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, CalendarPlus, ClipboardList, User, LogOut } from 'lucide-react';
+import { LayoutDashboard, UserPlus, CalendarPlus, ClipboardList, User, LogOut } from 'lucide-react';
 import authService from '../services/auth.service';
 
 export const DesktopSidebar: React.FC = () => {
@@ -16,18 +16,41 @@ export const DesktopSidebar: React.FC = () => {
       path: '/dashboard',
       icon: <LayoutDashboard size={19} />,
     },
-    {
-      id: 'add-duty',
-      label: isAdmin ? 'Add Employee & Duty' : 'Add Duty',
-      path: '/add-duty',
-      icon: <CalendarPlus size={19} />,
-    },
-    {
-      id: 'my-duties',
-      label: isAdmin ? 'Workforce Duties' : 'My Duties',
-      path: '/my-duties',
-      icon: <ClipboardList size={19} />,
-    },
+    ...(isAdmin
+      ? [
+          {
+            id: 'add-employee',
+            label: 'Add Employee',
+            path: '/add-employee',
+            icon: <UserPlus size={19} />,
+          },
+          {
+            id: 'add-duty',
+            label: 'Assign Duty to Employee',
+            path: '/add-duty',
+            icon: <CalendarPlus size={19} />,
+          },
+          {
+            id: 'my-duties',
+            label: 'Workforce Duties',
+            path: '/my-duties',
+            icon: <ClipboardList size={19} />,
+          },
+        ]
+      : [
+          {
+            id: 'add-duty',
+            label: 'Add Duty',
+            path: '/add-duty',
+            icon: <CalendarPlus size={19} />,
+          },
+          {
+            id: 'my-duties',
+            label: 'My Duties',
+            path: '/my-duties',
+            icon: <ClipboardList size={19} />,
+          },
+        ]),
     {
       id: 'profile',
       label: 'Profile',

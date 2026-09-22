@@ -33,4 +33,12 @@ export class AttendanceService {
 
     return savedFile;
   }
+
+  async getFileById(id: string): Promise<AttendanceFile | null> {
+    return this.fileRepo.findOne({ where: { id } });
+  }
+
+  async getFileByFileName(fileName: string): Promise<AttendanceFile | null> {
+    return this.fileRepo.findOne({ where: { fileName } });
+  }
 }

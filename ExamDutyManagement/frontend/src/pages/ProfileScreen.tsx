@@ -9,15 +9,14 @@ import {
   Mail,
   MapPin,
   Shield,
-  KeyRound,
   HelpCircle,
-  LogOut,
   CheckCircle2,
-  AlertCircle,
   CalendarCheck,
   Building,
   Headphones,
   ExternalLink,
+  CreditCard,
+  ShieldCheck,
 } from 'lucide-react';
 import authService, { EmployeeProfile } from '../services/auth.service';
 
@@ -26,76 +25,30 @@ export const ProfileScreen: React.FC = () => {
   const [profile, setProfile] = useState<EmployeeProfile | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Password change modal state
-  const [showPasswordModal, setShowPasswordModal] = useState<boolean>(false);
-  const [currentPassword, setCurrentPassword] = useState<string>('');
-  const [newPassword, setNewPassword] = useState<string>('');
-  const [confirmPassword, setConfirmPassword] = useState<string>('');
-  const [passwordStatus, setPasswordStatus] = useState<{ success?: string; error?: string } | null>(null);
-
   // Help modal
   const [showHelpModal, setShowHelpModal] = useState<boolean>(false);
 
   useEffect(() => {
-    let isMounted = true;
     const loadProfile = async () => {
       try {
         const stored = authService.getStoredUser();
-        const p = await authService.getMe(stored?.resourceId || '17655');
-        if (isMounted) setProfile(p);
+        const resId = stored?.resourceId;
+        const fetched = await authService.getMe(resId);
+        setProfile(fetched);
       } catch {
-        if (isMounted) {
-          setProfile(
-            authService.getStoredUser() || {
-              id: 'sanjeev-17655',
-              resourceId: '17655',
-              name: 'Sanjeev Kumar N',
-              mobile: '9876543210',
-              email: 'sanjeev.kumar@examduty.gov.in',
-              city: 'Bengaluru',
-              status: 'Active',
-            }
-          );
-        }
+        const stored = authService.getStoredUser();
+        if (stored) setProfile(stored);
       } finally {
-        if (isMounted) setLoading(false);
+        setLoading(false);
       }
     };
-
     loadProfile();
-    return () => {
-      isMounted = false;
-    };
   }, []);
 
   const handleLogout = () => {
     authService.logout();
-    sessionStorage.removeItem('exam_duty_user');
+    sessionStorage.clear();
     navigate('/login');
-  };
-
-  const handlePasswordSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setPasswordStatus(null);
-
-    if (!newPassword || newPassword.length < 6) {
-      setPasswordStatus({ error: 'New password must be at least 6 characters long.' });
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setPasswordStatus({ error: 'New passwords do not match.' });
-      return;
-    }
-
-    // Success simulation
-    setPasswordStatus({ success: 'Password changed successfully!' });
-    setTimeout(() => {
-      setShowPasswordModal(false);
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-      setPasswordStatus(null);
-    }, 1500);
   };
 
   const displayName = profile?.name || 'Sanjeev Kumar N';
@@ -103,6 +56,8 @@ export const ProfileScreen: React.FC = () => {
   const mobile = profile?.mobile || '9876543210';
   const email = profile?.email || 'sanjeev.kumar@examduty.gov.in';
   const city = profile?.city || 'Bengaluru';
+  const aadhaarNumber = profile?.aadhaarNumber;
+  const panNumber = profile?.panNumber;
   const initials = displayName
     .split(' ')
     .filter(Boolean)
@@ -152,22 +107,6 @@ export const ProfileScreen: React.FC = () => {
                 </div>
               </div>
 
-              <div className="profile-hero-actions">
-                <button
-                  className="btn-secondary"
-                  onClick={() => setShowPasswordModal(true)}
-                >
-                  <KeyRound size={16} />
-                  <span>Change Password</span>
-                </button>
-                <button
-                  className="btn-danger"
-                  onClick={handleLogout}
-                >
-                  <LogOut size={16} />
-                  <span>Logout</span>
-                </button>
-              </div>
             </div>
 
             {/* Profile Info Grid */}
@@ -204,27 +143,27 @@ export const ProfileScreen: React.FC = () => {
                   </span>
                   <span className="info-val">{city}</span>
                 </div>
+                <div className="info-item-row">
+                  <span className="info-label">
+                    <ShieldCheck size={16} /> Aadhaar Card
+                  </span>
+                  <span className="info-val bold" style={{ color: '#047857' }}>
+                    {aadhaarNumber ? `XXXX-XXXX-${aadhaarNumber.replace(/\s+/g, '').slice(-4)}` : 'Verified on Portal'}
+                  </span>
+                </div>
+                <div className="info-item-row">
+                  <span className="info-label">
+                    <CreditCard size={16} /> PAN Card
+                  </span>
+                  <span className="info-val bold" style={{ color: '#0369A1' }}>
+                    {panNumber || 'Verified on Portal'}
+                  </span>
+                </div>
               </div>
 
               <div className="profile-info-card">
                 <h3 className="card-subhead">System &amp; Quick Actions</h3>
                 <div className="quick-action-list">
-                  <button
-                    className="quick-action-row"
-                    onClick={() => setShowPasswordModal(true)}
-                  >
-                    <div className="action-row-left">
-                      <div className="action-row-icon blue">
-                        <KeyRound size={18} />
-                      </div>
-                      <div>
-                        <span className="action-row-title">Security &amp; Password</span>
-                        <span className="action-row-sub">Update your account login password</span>
-                      </div>
-                    </div>
-                    <ExternalLink size={15} color="#94A3B8" />
-                  </button>
-
                   <button
                     className="quick-action-row"
                     onClick={() => setShowHelpModal(true)}
@@ -239,22 +178,6 @@ export const ProfileScreen: React.FC = () => {
                       </div>
                     </div>
                     <ExternalLink size={15} color="#94A3B8" />
-                  </button>
-
-                  <button
-                    className="quick-action-row danger"
-                    onClick={handleLogout}
-                  >
-                    <div className="action-row-left">
-                      <div className="action-row-icon red">
-                        <LogOut size={18} />
-                      </div>
-                      <div>
-                        <span className="action-row-title" style={{ color: '#DC2626' }}>Logout Session</span>
-                        <span className="action-row-sub">Safely disconnect from this computer</span>
-                      </div>
-                    </div>
-                    <ExternalLink size={15} color="#DC2626" />
                   </button>
                 </div>
               </div>
@@ -295,16 +218,17 @@ export const ProfileScreen: React.FC = () => {
                 <MapPin size={16} />
                 <span>{city}</span>
               </div>
+              <div className="mobile-info-line">
+                <ShieldCheck size={16} />
+                <span>Aadhaar: {aadhaarNumber ? `XXXX-XXXX-${aadhaarNumber.replace(/\s+/g, '').slice(-4)}` : 'Verified'}</span>
+              </div>
+              <div className="mobile-info-line">
+                <CreditCard size={16} />
+                <span>PAN: {panNumber || 'Verified'}</span>
+              </div>
             </div>
 
             <div className="mobile-profile-btn-stack">
-              <button
-                className="mobile-btn-outline"
-                onClick={() => setShowPasswordModal(true)}
-              >
-                <KeyRound size={16} />
-                <span>Change Password</span>
-              </button>
               <button
                 className="mobile-btn-outline"
                 onClick={() => setShowHelpModal(true)}
@@ -312,97 +236,11 @@ export const ProfileScreen: React.FC = () => {
                 <HelpCircle size={16} />
                 <span>Help &amp; Support</span>
               </button>
-              <button
-                className="mobile-btn-logout"
-                onClick={handleLogout}
-              >
-                <LogOut size={16} />
-                <span>Logout</span>
-              </button>
             </div>
           </div>
         </main>
       </div>
 
-      {/* CHANGE PASSWORD MODAL */}
-      {showPasswordModal && (
-        <div className="modal-overlay" onClick={() => setShowPasswordModal(false)}>
-          <div className="modal-content-card" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header-row">
-              <h3 className="modal-title">Change Account Password</h3>
-              <button className="modal-close-btn" onClick={() => setShowPasswordModal(false)}>
-                &times;
-              </button>
-            </div>
-
-            {passwordStatus?.error && (
-              <div className="alert-banner alert-error" style={{ margin: '14px 20px 0' }}>
-                <AlertCircle size={16} />
-                <span>{passwordStatus.error}</span>
-              </div>
-            )}
-            {passwordStatus?.success && (
-              <div className="alert-banner alert-success" style={{ margin: '14px 20px 0' }}>
-                <CheckCircle2 size={16} />
-                <span>{passwordStatus.success}</span>
-              </div>
-            )}
-
-            <form onSubmit={handlePasswordSubmit}>
-              <div className="modal-body-details">
-                <div className="form-field-wrapper">
-                  <label className="field-label">Current Password</label>
-                  <input
-                    type="password"
-                    className="form-input-control"
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                    placeholder="Enter current password"
-                    required
-                  />
-                </div>
-
-                <div className="form-field-wrapper">
-                  <label className="field-label">New Password</label>
-                  <input
-                    type="password"
-                    className="form-input-control"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Minimum 6 characters"
-                    required
-                  />
-                </div>
-
-                <div className="form-field-wrapper">
-                  <label className="field-label">Confirm New Password</label>
-                  <input
-                    type="password"
-                    className="form-input-control"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Re-enter new password"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="modal-footer-row">
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => setShowPasswordModal(false)}
-                >
-                  Cancel
-                </button>
-                <button type="submit" className="btn-primary">
-                  Update Password
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* HELP & SUPPORT MODAL */}
       {showHelpModal && (
