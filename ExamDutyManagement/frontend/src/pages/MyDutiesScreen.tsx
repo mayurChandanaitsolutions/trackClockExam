@@ -26,7 +26,7 @@ import masterService, { Center, Exam, Role, Shift, EmployeeItem, City } from '..
 import authService from '../services/auth.service';
 import EmployeeDetailsModal from '../components/EmployeeDetailsModal';
 import { ExportJobsCard } from '../components/ExportJobsCard';
-import { ExportFilters } from '../utils/excelExport';
+import { normalizeDateToYMD } from '../utils/excelExport';
 import { API_BASE_URL } from '../config/api.config';
 
 export const MyDutiesScreen: React.FC = () => {
@@ -42,11 +42,6 @@ export const MyDutiesScreen: React.FC = () => {
   const adminPageSize = 15;
   const [dateFilter, setDateFilter] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [exportFilters, setExportFilters] = useState<ExportFilters>({
-    fromDate: '',
-    toDate: new Date().toISOString().slice(0, 10),
-    workPlace: 'All Places',
-  });
 
   // Selected duty for Details Modal
   const [viewingDuty, setViewingDuty] = useState<DutyItem | null>(null);
@@ -109,7 +104,7 @@ export const MyDutiesScreen: React.FC = () => {
   // Reset page to 1 when filters or search change
   useEffect(() => {
     setCurrentPage(1);
-  }, [dateFilter, searchQuery, examTypeFilter, exportFilters]);
+  }, [dateFilter, searchQuery, examTypeFilter]);
 
   useEffect(() => {
     // Load master data for edit modal dropdowns and export card
@@ -126,37 +121,18 @@ export const MyDutiesScreen: React.FC = () => {
   // Filter duties locally when search query typed, date selected, or exam type toggled
   const filteredDuties = duties.filter((d) => {
     // Date filter (Employee / Admin)
-    if (dateFilter && d.dutyDate !== dateFilter) {
-      return false;
+    if (dateFilter) {
+      const dutyDateYMD = normalizeDateToYMD(d.dutyDate);
+      const filterYMD = normalizeDateToYMD(dateFilter);
+      if (dutyDateYMD !== filterYMD && d.dutyDate !== dateFilter) {
+        return false;
+      }
     }
     if (examTypeFilter !== 'All') {
       const currentType = d.dutyType || d.exam?.type || 'Exam';
       if (currentType !== examTypeFilter) return false;
     }
 
-    // Work Place filter from TrackClock HR card
-    if (exportFilters.workPlace && exportFilters.workPlace !== 'All Places') {
-      const dutyCity = (d.city?.name || d.employee?.city || '').toLowerCase().trim();
-      const target = exportFilters.workPlace.toLowerCase().trim();
-      const match =
-        dutyCity.includes(target) ||
-        (target === 'mangaluru' && dutyCity.includes('mangal')) ||
-        (target === 'mangalore' && dutyCity.includes('mangal')) ||
-        (target === 'bangalore' && dutyCity.includes('bengal')) ||
-        (target === 'shivamogga' && (dutyCity.includes('shiva') || dutyCity.includes('shimo'))) ||
-        (target === 'mysore' && dutyCity.includes('myso'));
-      if (!match) return false;
-    }
-
-    // From Date filter from TrackClock HR card
-    if (exportFilters.fromDate && d.dutyDate) {
-      if (d.dutyDate < exportFilters.fromDate) return false;
-    }
-
-    // To Date filter from TrackClock HR card
-    if (exportFilters.toDate && d.dutyDate) {
-      if (d.dutyDate > exportFilters.toDate) return false;
-    }
     if (!searchQuery.trim()) return true;
     const term = searchQuery.toLowerCase();
     const examName = d.exam?.name?.toLowerCase() || '';
@@ -640,10 +616,6 @@ export const MyDutiesScreen: React.FC = () => {
               <ExportJobsCard
                 duties={duties}
                 employees={employees}
-                onFilterChange={(f) => {
-                  setExportFilters(f);
-                  setCurrentPage(1);
-                }}
               />
             )}
           </main>
@@ -925,10 +897,6 @@ export const MyDutiesScreen: React.FC = () => {
               <ExportJobsCard
                 duties={duties}
                 employees={employees}
-                onFilterChange={(f) => {
-                  setExportFilters(f);
-                  setCurrentPage(1);
-                }}
               />
             </div>
           )}

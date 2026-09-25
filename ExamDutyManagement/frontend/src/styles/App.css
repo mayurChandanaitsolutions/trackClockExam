@@ -125,27 +125,29 @@
   align-items: center;
   justify-content: center;
   background-color: #E2E8F0;
-  padding: 24px 16px;
+  padding: 16px 12px;
+  box-sizing: border-box;
 }
 
 @media (max-width: 480px) {
   .login-screen-wrapper {
     padding: 0;
     background-color: #FFFFFF;
+    align-items: stretch;
   }
 }
 
 .login-phone-frame {
   width: 100%;
-  max-width: 420px;
-  min-height: 840px;
+  max-width: 390px;
   background-color: #FFFFFF;
-  border-radius: 36px;
-  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.25);
+  border-radius: 24px;
+  box-shadow: 0 16px 36px -8px rgba(15, 23, 42, 0.2);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   position: relative;
+  margin: auto;
 }
 
 @media (max-width: 480px) {
@@ -154,13 +156,14 @@
     min-height: 100vh;
     border-radius: 0;
     box-shadow: none;
+    justify-content: space-between;
   }
 }
 
 /* Hero Wave Banner */
 .login-top-hero {
   background: linear-gradient(145deg, #1E3A8A 0%, #1D4ED8 55%, #2563EB 100%);
-  padding: 44px 24px 60px 24px;
+  padding: 20px 20px 28px 20px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -170,32 +173,32 @@
 }
 
 .hero-shield-box {
-  width: 68px;
-  height: 68px;
+  width: 46px;
+  height: 46px;
   background: rgba(255, 255, 255, 0.16);
   backdrop-filter: blur(12px);
   border: 1.5px solid rgba(255, 255, 255, 0.3);
-  border-radius: 20px;
+  border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 16px;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+  margin-bottom: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
 }
 
 .hero-app-title {
-  font-size: 23px;
+  font-size: 19px;
   font-weight: 800;
-  letter-spacing: -0.4px;
-  margin-bottom: 6px;
+  letter-spacing: -0.3px;
+  margin-bottom: 2px;
   color: #FFFFFF;
 }
 
 .hero-app-subtitle {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   color: rgba(255, 255, 255, 0.85);
-  letter-spacing: 0.2px;
+  letter-spacing: 0.1px;
 }
 
 .hero-wave-svg {
@@ -203,27 +206,27 @@
   bottom: 0;
   left: 0;
   right: 0;
-  height: 34px;
+  height: 20px;
   pointer-events: none;
 }
 
 /* Login Floating Card */
 .login-card-container {
-  padding: 16px 28px 24px 28px;
+  padding: 16px 22px 24px 22px;
   display: flex;
   flex-direction: column;
 }
 
 /* Login Role Toggle */
 .login-role-switch-container {
-  margin-bottom: 20px;
+  margin-bottom: 10px;
 }
 
 .login-role-switch {
   display: flex;
   background-color: #F1F5F9;
-  border-radius: 12px;
-  padding: 4px;
+  border-radius: 10px;
+  padding: 3px;
   gap: 4px;
   border: 1.5px solid #E2E8F0;
 }
@@ -233,12 +236,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 10px 14px;
-  font-size: 14px;
+  gap: 6px;
+  padding: 7px 12px;
+  font-size: 13px;
   font-weight: 600;
   border: none;
-  border-radius: 9px;
+  border-radius: 7px;
   background: transparent;
   color: #64748B;
   cursor: pointer;
@@ -256,18 +259,18 @@
 }
 
 .login-header-group {
-  margin-bottom: 22px;
+  margin-bottom: 10px;
 }
 
 .login-form-title {
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 800;
   color: #0F172A;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .login-form-sub {
-  font-size: 14.5px;
+  font-size: 12.5px;
   color: #64748B;
   font-weight: 500;
 }
@@ -275,16 +278,16 @@
 .form-group-item {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-bottom: 18px;
+  gap: 3px;
+  margin-bottom: 10px;
 }
 
 .input-title-label {
-  font-size: 13px;
+  font-size: 11.5px;
   font-weight: 700;
   color: #475569;
   text-transform: uppercase;
-  letter-spacing: 0.6px;
+  letter-spacing: 0.5px;
 }
 
 .reference-input-box {
@@ -292,9 +295,9 @@
   align-items: center;
   background-color: #FFFFFF;
   border: 1.5px solid #E2E8F0;
-  border-radius: 12px;
-  padding: 0 14px;
-  height: 50px;
+  border-radius: 10px;
+  padding: 0 12px;
+  height: 40px;
   transition: all 0.2s ease;
 }
 
@@ -310,7 +313,7 @@
 
 .input-leading-icon {
   color: #94A3B8;
-  margin-right: 12px;
+  margin-right: 10px;
   flex-shrink: 0;
 }
 
@@ -319,49 +322,49 @@
   border: none;
   background: transparent;
   outline: none;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   color: #0F172A;
 }
 
 .field-error-msg {
-  font-size: 13.5px;
+  font-size: 12px;
   color: #DC2626;
   font-weight: 600;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin-top: 2px;
+  margin-top: 1px;
 }
 
 .reference-login-btn {
   width: 100%;
-  height: 50px;
+  height: 42px;
   background: linear-gradient(135deg, #1D4ED8 0%, #2563EB 100%);
   color: #FFFFFF;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
-  letter-spacing: 0.6px;
-  border-radius: 12px;
+  letter-spacing: 0.5px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  margin-top: 8px;
-  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.28);
+  margin-top: 4px;
+  box-shadow: 0 6px 14px rgba(37, 99, 235, 0.25);
   transition: all 0.2s ease;
 }
 
 .reference-login-btn:hover {
   background: linear-gradient(135deg, #1E3A8A 0%, #1D4ED8 100%);
-  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.35);
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.32);
   transform: translateY(-1px);
 }
 
 /* Bottom Graphic & Footer */
 .login-bottom-illustration {
   margin-top: auto;
-  padding: 24px 20px;
+  padding: 8px 16px 12px 16px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -369,34 +372,34 @@
 }
 
 .illustration-graphic-badge {
-  width: 76px;
-  height: 76px;
+  width: 44px;
+  height: 44px;
   background-color: #EFF6FF;
   border: 1px solid #DBEAFE;
-  border-radius: 24px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 12px;
+  margin-bottom: 4px;
   position: relative;
 }
 
 .workforce-icon-bg {
   position: absolute;
-  right: -6px;
-  bottom: -4px;
-  opacity: 0.8;
+  right: -4px;
+  bottom: -3px;
+  opacity: 0.75;
 }
 
 .illustration-headline {
-  font-size: 14.5px;
+  font-size: 12.5px;
   font-weight: 700;
   color: #1E3A8A;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .illustration-sub {
-  font-size: 13px;
+  font-size: 11px;
   color: #94A3B8;
   font-weight: 500;
 }

@@ -5,27 +5,44 @@ import { exportEmployeesToExcel } from '../utils/excelExport';
 
 interface ExportEmployeesCardProps {
   employees: EmployeeItem[];
-  selectedCity: string;
-  onCityChange: (city: string) => void;
+  selectedCity?: string;
+  onCityChange?: (city: string) => void;
   className?: string;
 }
 
 export const ExportEmployeesCard: React.FC<ExportEmployeesCardProps> = ({
   employees,
-  selectedCity,
+  selectedCity: propSelectedCity,
   onCityChange,
   className = '',
 }) => {
+  const [internalCity, setInternalCity] = useState<string>('ALL');
   const [exportNotice, setExportNotice] = useState<string | null>(null);
 
+  // If a controlled value and handler are provided, use them; otherwise use local state
+  const activeCity = (propSelectedCity !== undefined && onCityChange) ? propSelectedCity : internalCity;
+
+  const handleCityChange = (city: string) => {
+    setInternalCity(city);
+    if (onCityChange) {
+      onCityChange(city);
+    }
+  };
+
   const handleExport = () => {
-    const result = exportEmployeesToExcel(employees, selectedCity);
-    const placeName = (!selectedCity || selectedCity === 'ALL' || selectedCity === 'All Places') 
+    const result = exportEmployeesToExcel(employees, activeCity);
+    const placeName = (!activeCity || activeCity === 'ALL' || activeCity === 'All Places') 
       ? 'All Places' 
-      : selectedCity;
-    setExportNotice(
-      `Successfully exported ${result.count} workforce record(s) for ${placeName} into ${result.filename}! Opening in Excel...`
-    );
+      : activeCity;
+    if (result.count === 0) {
+      setExportNotice(
+        `No workforce members found for ${placeName}. An empty spreadsheet template was downloaded.`
+      );
+    } else {
+      setExportNotice(
+        `Successfully exported ${result.count} workforce record(s) for ${placeName} into ${result.filename}! Opening in Excel...`
+      );
+    }
     setTimeout(() => {
       setExportNotice(null);
     }, 6000);
@@ -51,9 +68,9 @@ export const ExportEmployeesCard: React.FC<ExportEmployeesCardProps> = ({
           <div className="export-input-wrapper">
             <select
               className="export-native-select"
-              value={selectedCity}
-              onChange={(e) => onCityChange(e.target.value)}
-              title="Filter workforce by workplace city"
+              value={activeCity}
+              onChange={(e) => handleCityChange(e.target.value)}
+              title="Filter workforce by workplace city for Excel export"
             >
               <option value="ALL">All Places</option>
               <option value="Mysore">Mysore</option>

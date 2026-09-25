@@ -54,14 +54,11 @@ export const AddEmployeeScreen: React.FC = () => {
   const [deletingEmployee, setDeletingEmployee] = useState<EmployeeItem | null>(null);
   const [deleting, setDeleting] = useState<boolean>(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deletedSuccessInfo, setDeletedSuccessInfo] = useState<{ name: string; resourceId: string } | null>(null);
 
   // Registered Employees List for Admin reference
   const [registeredEmployees, setRegisteredEmployees] = useState<EmployeeItem[]>([]);
   const [loadingList, setLoadingList] = useState<boolean>(false);
-
-  // City Filter State for TrackClock HR bottom controls
-  const [cityFilter, setCityFilter] = useState<string>('ALL');
-  const allowedCities = ['Mysore', 'Bengaluru', 'Mangalore', 'Shivamogga', 'Mandya', 'Davanagere', 'Dharwad'];
 
   // Submission State
   const [submitting, setSubmitting] = useState<boolean>(false);
@@ -69,18 +66,7 @@ export const AddEmployeeScreen: React.FC = () => {
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
   const [createdEmp, setCreatedEmp] = useState<{ id: string; resourceId: string; name: string } | null>(null);
 
-  // Helper to match city variations
-  const matchesCity = (empCity: string | undefined, targetCity: string): boolean => {
-    if (!targetCity || targetCity === 'ALL' || targetCity === 'All Places') return true;
-    if (!empCity) return targetCity.toLowerCase().includes('myso');
-    const c = empCity.toLowerCase().trim();
-    const t = targetCity.toLowerCase().trim();
-    if (t === 'bangalore' || t === 'bengaluru') return c.includes('bangal') || c.includes('bengal');
-    if (t === 'shivamogga' || t === 'shimoga') return c.includes('shiva') || c.includes('shimo');
-    if (t === 'mangalore' || t === 'mangaluru') return c.includes('mangal');
-    if (t === 'mysore' || t === 'mysuru') return c.includes('myso');
-    return c.includes(t);
-  };
+
 
   // Load existing employees
   const loadEmployees = async () => {
@@ -185,10 +171,12 @@ export const AddEmployeeScreen: React.FC = () => {
     if (!deletingEmployee) return;
     setDeleting(true);
     setDeleteError(null);
+    const info = { name: deletingEmployee.name, resourceId: deletingEmployee.resourceId };
     try {
       await masterService.deleteEmployee(deletingEmployee.resourceId);
-      setSubmitSuccess(`Employee "${deletingEmployee.name}" (ID: ${deletingEmployee.resourceId}) deleted successfully.`);
       setDeletingEmployee(null);
+      setDeletedSuccessInfo(info);
+      setSubmitSuccess(`Employee "${info.name}" (ID: ${info.resourceId}) deleted successfully.`);
       loadEmployees();
     } catch (err: any) {
       setDeleteError(err.response?.data?.message || err.message || 'Failed to delete employee.');
@@ -201,19 +189,8 @@ export const AddEmployeeScreen: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const pageSize = 15;
 
-  // Filtered employees for table display
-  const filteredEmployees = registeredEmployees.filter((emp) => {
-    if (cityFilter === 'ALL' || cityFilter === 'All Places') return true;
-    return matchesCity(emp.city, cityFilter);
-  });
-
-  // Total pages
-  const totalPages = Math.max(1, Math.ceil(filteredEmployees.length / pageSize));
-
-  // Reset page to 1 when city filter changes
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [cityFilter]);
+  // Total pages based on all registered employees
+  const totalPages = Math.max(1, Math.ceil(registeredEmployees.length / pageSize));
 
   // Keep currentPage within bounds if list shrinks
   useEffect(() => {
@@ -223,7 +200,7 @@ export const AddEmployeeScreen: React.FC = () => {
   }, [totalPages, currentPage]);
 
   // Paginated employees for current page
-  const displayedEmployees = filteredEmployees.slice(
+  const displayedEmployees = registeredEmployees.slice(
     (currentPage - 1) * pageSize,
     currentPage * pageSize
   );
@@ -487,8 +464,7 @@ export const AddEmployeeScreen: React.FC = () => {
                     <Users size={18} color="#2563EB" />
                   </div>
                   <h2 className="recent-main-title">
-                    Registered Workforce Members ({filteredEmployees.length}
-                    {cityFilter !== 'ALL' && cityFilter !== 'All Places' && ` in ${cityFilter}`})
+                    Registered Workforce Members ({registeredEmployees.length})
                   </h2>
                 </div>
               </div>
@@ -512,7 +488,7 @@ export const AddEmployeeScreen: React.FC = () => {
                     {displayedEmployees.length === 0 ? (
                       <tr>
                         <td colSpan={9} style={{ textAlign: 'center', padding: '30px', color: '#64748B' }}>
-                          No workforce members found {cityFilter !== 'ALL' && cityFilter !== 'All Places' ? `for ${cityFilter}` : ''}.
+                          No workforce members found.
                         </td>
                       </tr>
                     ) : (
@@ -601,7 +577,7 @@ export const AddEmployeeScreen: React.FC = () => {
               </div>
 
               {/* TrackClock HR Horizontal Numbered Pagination Bar */}
-              {filteredEmployees.length > 0 && (
+              {registeredEmployees.length > 0 && (
                 <div
                   className="trackclock-pagination-wrap"
                   style={{
@@ -615,8 +591,8 @@ export const AddEmployeeScreen: React.FC = () => {
                 >
                   <div style={{ fontSize: '13.5px', color: '#64748B', fontWeight: 500 }}>
                     *Showing {(currentPage - 1) * pageSize + 1} -{' '}
-                    {Math.min(currentPage * pageSize, filteredEmployees.length)} of{' '}
-                    {filteredEmployees.length} records (15 per page)
+                    {Math.min(currentPage * pageSize, registeredEmployees.length)} of{' '}
+                    {registeredEmployees.length} records (15 per page)
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -663,9 +639,7 @@ export const AddEmployeeScreen: React.FC = () => {
 
             {/* TrackClock HR Style Work Place Filter & Export Card */}
             <ExportEmployeesCard
-              employees={filteredEmployees}
-              selectedCity={cityFilter}
-              onCityChange={setCityFilter}
+              employees={registeredEmployees}
             />
           </main>
         </div>
@@ -810,8 +784,7 @@ export const AddEmployeeScreen: React.FC = () => {
           {/* Mobile Workforce List */}
           <div style={{ background: '#FFFFFF', borderRadius: '12px', padding: '14px', border: '1px solid #E2E8F0' }}>
             <h3 style={{ margin: '0 0 12px 0', fontSize: '15px', fontWeight: 700, color: '#1E293B' }}>
-              Registered Staff ({filteredEmployees.length}
-              {cityFilter !== 'ALL' && cityFilter !== 'All Places' && ` in ${cityFilter}`})
+              Registered Staff ({registeredEmployees.length})
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {displayedEmployees.map((emp) => (
@@ -873,7 +846,7 @@ export const AddEmployeeScreen: React.FC = () => {
             </div>
 
             {/* Mobile Horizontal Numbered Pagination Bar */}
-            {filteredEmployees.length > 0 && (
+            {registeredEmployees.length > 0 && (
               <div
                 className="trackclock-pagination-wrap"
                 style={{
@@ -928,9 +901,7 @@ export const AddEmployeeScreen: React.FC = () => {
 
           {/* TrackClock HR Style Work Place Filter & Export Card for Mobile */}
           <ExportEmployeesCard
-            employees={filteredEmployees}
-            selectedCity={cityFilter}
-            onCityChange={setCityFilter}
+            employees={registeredEmployees}
           />
         </main>
       </div>
@@ -1043,6 +1014,83 @@ export const AddEmployeeScreen: React.FC = () => {
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Success Popup Modal */}
+      {deletedSuccessInfo && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 100000,
+            padding: '20px',
+          }}
+          onClick={() => setDeletedSuccessInfo(null)}
+        >
+          <div
+            style={{
+              background: '#FFFFFF',
+              borderRadius: '16px',
+              maxWidth: '440px',
+              width: '100%',
+              padding: '28px 24px',
+              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)',
+              textAlign: 'center',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                width: '56px',
+                height: '56px',
+                borderRadius: '50%',
+                background: '#DCFCE7',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#16A34A',
+                margin: '0 auto 16px auto',
+              }}
+            >
+              <CheckCircle2 size={32} />
+            </div>
+
+            <h3 style={{ margin: '0 0 10px 0', fontSize: '19px', fontWeight: 700, color: '#1E293B' }}>
+              Employee Deleted Successfully
+            </h3>
+
+            <p style={{ fontSize: '15px', color: '#475569', lineHeight: 1.6, margin: '0 0 24px 0' }}>
+              Employee <strong style={{ color: '#0F172A' }}>{deletedSuccessInfo.name}</strong>, Resource ID:{' '}
+              <strong style={{ color: '#0F172A' }}>{deletedSuccessInfo.resourceId}</strong> has been deleted successfully.
+            </p>
+
+            <button
+              type="button"
+              onClick={() => setDeletedSuccessInfo(null)}
+              style={{
+                width: '100%',
+                padding: '11px 20px',
+                background: '#16A34A',
+                color: '#FFFFFF',
+                border: 'none',
+                borderRadius: '8px',
+                fontWeight: 600,
+                fontSize: '15px',
+                cursor: 'pointer',
+                transition: 'background 0.2s',
+              }}
+              onMouseOver={(e) => (e.currentTarget.style.background = '#15803D')}
+              onMouseOut={(e) => (e.currentTarget.style.background = '#16A34A')}
+            >
+              OK
+            </button>
           </div>
         </div>
       )}

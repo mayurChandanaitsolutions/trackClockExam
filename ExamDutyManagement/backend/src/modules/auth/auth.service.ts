@@ -47,7 +47,7 @@ export class AuthService {
     const isVerified = Boolean(
       employee.isIdentityVerified ||
       (employee.aadhaarNumber && employee.aadhaarNumber.trim().length >= 10 &&
-       employee.panNumber && employee.panNumber.trim().length >= 10)
+       employee.panNumber && employee.panNumber.trim().length >= 8)
     );
 
     return Object.assign(employee, {

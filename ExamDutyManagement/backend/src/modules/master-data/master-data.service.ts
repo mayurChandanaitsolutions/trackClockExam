@@ -119,7 +119,7 @@ export class MasterDataService {
     const isVerified = Boolean(
       emp.isIdentityVerified ||
       (emp.aadhaarNumber && emp.aadhaarNumber.trim().length >= 10 &&
-       emp.panNumber && emp.panNumber.trim().length >= 10)
+       emp.panNumber && emp.panNumber.trim().length >= 8)
     );
     return Object.assign(emp, { isIdentityVerified: isVerified });
   }

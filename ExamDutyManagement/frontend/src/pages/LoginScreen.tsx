@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Shield, User, Phone, ArrowRight, AlertCircle, ClipboardCheck, Users, Loader2, ShieldCheck } from 'lucide-react';
+import { Shield, User, Phone, ArrowRight, AlertCircle, Loader2, ShieldCheck } from 'lucide-react';
 import authService from '../services/auth.service';
 
 export const LoginScreen: React.FC = () => {
@@ -8,8 +8,8 @@ export const LoginScreen: React.FC = () => {
 
   // Role Mode: 'employee' | 'admin'
   const [loginRole, setLoginRole] = useState<'employee' | 'admin'>('employee');
-  const [resourceId, setResourceId] = useState<string>('597299');
-  const [mobile, setMobile] = useState<string>('8050162843');
+  const [resourceId, setResourceId] = useState<string>('');
+  const [mobile, setMobile] = useState<string>('');
   const [errors, setErrors] = useState<{ resourceId?: string; mobile?: string; server?: string }>({});
   const [loading, setLoading] = useState<boolean>(false);
 
@@ -37,20 +37,6 @@ export const LoginScreen: React.FC = () => {
       return;
     }
 
-    // Client-side quick check for Admin role
-    const resUpper = resourceId.trim().toUpperCase();
-    const isAdmin =
-      resUpper === '17655' ||
-      resUpper.includes('ADMIN') ||
-      resUpper.includes('CHANDANA');
-
-    if (loginRole === 'admin' && !isAdmin) {
-      setErrors({
-        server: `Access Denied: Resource ID ${resourceId} does not have Administrator privileges. Only Administrators can sign in here. Please switch to Employee Login.`,
-      });
-      return;
-    }
-
     setLoading(true);
     setErrors((prev) => ({ ...prev, server: undefined }));
 
@@ -66,7 +52,7 @@ export const LoginScreen: React.FC = () => {
         // Employee portal: check verification status directly from backend response!
         const isVerified = Boolean(
           emp.isIdentityVerified ||
-          (emp.aadhaarNumber && emp.aadhaarNumber.trim().length >= 10 && emp.panNumber && emp.panNumber.trim().length >= 10) ||
+          (emp.aadhaarNumber && emp.aadhaarNumber.trim().length >= 10 && emp.panNumber && emp.panNumber.trim().length >= 8) ||
           localStorage.getItem('identity_verified_' + emp.resourceId) === 'true'
         );
 
@@ -93,9 +79,9 @@ export const LoginScreen: React.FC = () => {
         <div className="login-top-hero">
           <div className="hero-shield-box">
             {loginRole === 'admin' ? (
-              <ShieldCheck size={40} color="#FFFFFF" strokeWidth={2.4} />
+              <ShieldCheck size={30} color="#FFFFFF" strokeWidth={2.4} />
             ) : (
-              <Shield size={40} color="#FFFFFF" strokeWidth={2.4} />
+              <Shield size={30} color="#FFFFFF" strokeWidth={2.4} />
             )}
           </div>
           <h1 className="hero-app-title">Exam Duty Management</h1>
@@ -123,8 +109,8 @@ export const LoginScreen: React.FC = () => {
                 onClick={() => {
                   setLoginRole('employee');
                   setErrors({});
-                  setResourceId('597299');
-                  setMobile('8050162843');
+                  setResourceId('');
+                  setMobile('');
                 }}
               >
                 <User size={16} />
@@ -136,8 +122,8 @@ export const LoginScreen: React.FC = () => {
                 onClick={() => {
                   setLoginRole('admin');
                   setErrors({});
-                  setResourceId('17655');
-                  setMobile('9876543210');
+                  setResourceId('');
+                  setMobile('');
                 }}
               >
                 <ShieldCheck size={16} />
@@ -150,11 +136,6 @@ export const LoginScreen: React.FC = () => {
             <h2 className="login-form-title">
               {loginRole === 'admin' ? 'Admin Portal Login' : 'Employee Login'}
             </h2>
-            <p className="login-form-sub">
-              {loginRole === 'admin'
-                ? 'Administrative access for authorized managers only'
-                : 'Sign in with your registered workforce resource ID'}
-            </p>
           </div>
 
           {errors.server && (
@@ -187,7 +168,7 @@ export const LoginScreen: React.FC = () => {
                   id="resourceId"
                   type="text"
                   className="clean-input"
-                  placeholder="17655"
+                  placeholder="Enter Resource ID"
                   value={resourceId}
                   disabled={loading}
                   onChange={(e) => {
@@ -218,7 +199,7 @@ export const LoginScreen: React.FC = () => {
                   type="tel"
                   maxLength={10}
                   className="clean-input"
-                  placeholder="9876543210"
+                  placeholder="Enter 10-digit Mobile Number"
                   value={mobile}
                   disabled={loading}
                   onChange={(e) => {
@@ -252,91 +233,9 @@ export const LoginScreen: React.FC = () => {
                 </>
               )}
             </button>
-
-            {/* Quick Staff Selection helper */}
-            <div style={{ marginTop: '16px', paddingTop: '14px', borderTop: '1px solid #E2E8F0', textAlign: 'center' }}>
-              <span style={{ fontSize: '13px', color: '#64748B', fontWeight: 600, display: 'block', marginBottom: '8px' }}>
-                {loginRole === 'admin' ? 'TEMPORARY ADMIN CREDENTIAL:' : 'QUICK LOGIN (REGISTERED STAFF):'}
-              </span>
-              <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                {loginRole === 'admin' ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setResourceId('17655');
-                      setMobile('9876543210');
-                    }}
-                    style={{
-                      background: '#FEF3C7',
-                      border: '1px solid #FCD34D',
-                      color: '#92400E',
-                      borderRadius: '6px',
-                      padding: '5px 12px',
-                      fontSize: '13px',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    👑 Sanjeev Kumar (17655)
-                  </button>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setResourceId('597299');
-                        setMobile('8050162843');
-                      }}
-                      style={{
-                        background: '#EFF6FF',
-                        border: '1px solid #BFDBFE',
-                        color: '#1D4ED8',
-                        borderRadius: '6px',
-                        padding: '5px 12px',
-                        fontSize: '13px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      👤 IFSHA (597299)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setResourceId('597300');
-                        setMobile('8073634462');
-                      }}
-                      style={{
-                        background: '#EFF6FF',
-                        border: '1px solid #BFDBFE',
-                        color: '#1D4ED8',
-                        borderRadius: '6px',
-                        padding: '5px 12px',
-                        fontSize: '13px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      👤 Imsha Gaima (597300)
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
           </form>
         </div>
 
-        {/* Bottom Illustrated Section */}
-        <div className="login-bottom-illustration">
-          <div className="illustration-graphic-badge">
-            <div className="clipboard-icon-center">
-              <ClipboardCheck size={42} color="#3B82F6" strokeWidth={2.2} />
-            </div>
-            <Users size={28} color="#93C5FD" className="workforce-icon-bg" />
-          </div>
-          <p className="illustration-headline">Reliable Workforce for a Better Tomorrow</p>
-          <span className="illustration-sub">Official Examination Duty Portal</span>
-        </div>
       </div>
     </div>
   );

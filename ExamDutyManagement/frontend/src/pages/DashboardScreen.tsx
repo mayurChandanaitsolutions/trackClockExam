@@ -11,42 +11,27 @@ import {
   GraduationCap,
   BookOpen,
   UserCheck,
-  Users,
 } from 'lucide-react';
 import dashboardService, { EmployeeDashboardData } from '../services/dashboard.service';
 import authService from '../services/auth.service';
-import masterService, { EmployeeItem } from '../services/master.service';
 
 export const DashboardScreen: React.FC = () => {
   const user = authService.getStoredUser();
   const isAdmin = Boolean(user?.isAdmin || user?.role === 'admin' || user?.resourceId === '17655');
-  const [employeesList, setEmployeesList] = useState<EmployeeItem[]>([]);
-  const [selectedFilterResourceId, setSelectedFilterResourceId] = useState<string>(
-    isAdmin ? 'ALL' : (user?.resourceId || '')
-  );
+  const filterResourceId = isAdmin ? 'ALL' : (user?.resourceId || '');
   const [selectedYear, setSelectedYear] = useState<number>(2026);
 
   const [dashboardData, setDashboardData] = useState<EmployeeDashboardData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Load employees list for dropdown filter (excluding temporary admin Sanjeev Kumar)
-  useEffect(() => {
-    masterService.getEmployees().then((emps) => {
-      if (emps && emps.length > 0) {
-        const realStaff = emps.filter((e) => e.resourceId !== '17655' && !e.isAdmin);
-        setEmployeesList(realStaff.length > 0 ? realStaff : emps);
-      }
-    }).catch(() => {});
-  }, []);
-
-  // Fetch fresh dashboard data whenever selectedFilterResourceId or selectedYear changes
+  // Fetch fresh dashboard data whenever filterResourceId or selectedYear changes
   useEffect(() => {
     let isMounted = true;
 
     const fetchDashboard = async () => {
       setLoading(true);
       try {
-        const data = await dashboardService.getEmployeeDashboard(selectedFilterResourceId, selectedYear);
+        const data = await dashboardService.getEmployeeDashboard(filterResourceId, selectedYear);
         if (isMounted) {
           setDashboardData(data);
         }
@@ -63,10 +48,10 @@ export const DashboardScreen: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [selectedFilterResourceId, selectedYear]);
+  }, [filterResourceId, selectedYear]);
 
   // Derived statistics (Live from MSSQL)
-  const isAll = selectedFilterResourceId === 'ALL';
+  const isAll = filterResourceId === 'ALL';
   const totalDuties = isAll
     ? (dashboardData?.stats?.systemTotalDuties ?? dashboardData?.stats?.totalDuties ?? 0)
     : (dashboardData?.stats?.totalDuties ?? 0);
@@ -78,7 +63,7 @@ export const DashboardScreen: React.FC = () => {
     ? (isAll ? 'Administrator (System Overview)' : (dashboardData?.employee?.name || 'Staff Member'))
     : (user?.name || dashboardData?.employee?.name || 'Employee');
   const displayResourceId = isAdmin
-    ? (isAll ? 'ADMIN' : (dashboardData?.employee?.resourceId || selectedFilterResourceId))
+    ? (isAll ? 'ADMIN' : (dashboardData?.employee?.resourceId || filterResourceId))
     : (user?.resourceId || dashboardData?.employee?.resourceId || '');
 
   const recentDuties: RecentDutySummary[] | undefined = dashboardData?.recentDuties;
@@ -118,30 +103,6 @@ export const DashboardScreen: React.FC = () => {
                   )}
                 </div>
               </div>
-
-              {/* Right Side: Member Filter Controls */}
-              {employeesList.length > 0 && (
-                <div className="welcome-banner-right">
-                  <div className="banner-filter-box">
-                    <Users size={16} color="#FFFFFF" />
-                    <span className="banner-filter-label">FILTER:</span>
-                    <select
-                      value={selectedFilterResourceId}
-                      onChange={(e) => setSelectedFilterResourceId(e.target.value)}
-                      className="banner-filter-select"
-                    >
-                      <option value="ALL" style={{ color: '#0F172A' }}>
-                        All Members ({dashboardData?.stats?.systemTotalDuties ?? totalDuties} Duties)
-                      </option>
-                      {employeesList.map((emp) => (
-                        <option key={emp.id} value={emp.resourceId} style={{ color: '#0F172A' }}>
-                          {emp.name} (ID: {emp.resourceId})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* 4 Statistics Cards in ONE ROW */}
@@ -215,47 +176,6 @@ export const DashboardScreen: React.FC = () => {
 
         {/* Mobile Main Body */}
         <main className="mobile-content-body">
-          {/* Mobile Filter Bar */}
-          <div style={{ padding: '0 16px', marginBottom: '12px' }}>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                background: '#EFF6FF',
-                padding: '6px 12px',
-                borderRadius: '8px',
-                border: '1px solid #DBEAFE',
-              }}
-            >
-              <Users size={15} color="#2563EB" />
-              <span style={{ fontSize: '13px', color: '#1E40AF', fontWeight: 600 }}>Filter:</span>
-              <select
-                value={selectedFilterResourceId}
-                onChange={(e) => setSelectedFilterResourceId(e.target.value)}
-                style={{
-                  flex: 1,
-                  background: 'transparent',
-                  border: 'none',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  color: '#1E293B',
-                  outline: 'none',
-                  cursor: 'pointer',
-                }}
-              >
-                <option value="ALL">
-                  All Members ({dashboardData?.stats?.systemTotalDuties ?? totalDuties} Duties)
-                </option>
-                {employeesList.map((emp) => (
-                  <option key={emp.id} value={emp.resourceId}>
-                    {emp.name} ({emp.resourceId})
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
           {/* 2x2 Stat Cards Grid */}
           <section className="mobile-stats-grid" aria-label="Duty Statistics">
             <StatCard

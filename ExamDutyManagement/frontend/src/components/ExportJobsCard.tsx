@@ -17,10 +17,8 @@ export const ExportJobsCard: React.FC<ExportJobsCardProps> = ({
   onFilterChange,
   className = '',
 }) => {
-  // Default toDate to current local date
-  const todayStr = new Date().toISOString().slice(0, 10);
   const [fromDate, setFromDate] = useState<string>('');
-  const [toDate, setToDate] = useState<string>(todayStr);
+  const [toDate, setToDate] = useState<string>('');
   const [workPlace, setWorkPlace] = useState<string>('All Places');
   const [exportNotice, setExportNotice] = useState<string | null>(null);
 
@@ -45,9 +43,21 @@ export const ExportJobsCard: React.FC<ExportJobsCardProps> = ({
       toDate,
       workPlace,
     });
-    setExportNotice(
-      `Successfully exported ${result.count} records into ${result.filename}! Opening in Excel...`
-    );
+    const placeName = (!workPlace || workPlace === 'ALL' || workPlace === 'All Places') 
+      ? 'All Places' 
+      : workPlace;
+    const dateDesc = fromDate || toDate
+      ? ` (${[fromDate ? `from ${fromDate}` : '', toDate ? `to ${toDate}` : ''].filter(Boolean).join(' ')})`
+      : '';
+    if (result.count === 0) {
+      setExportNotice(
+        `No assigned duty record(s) found for ${placeName}${dateDesc}. An empty spreadsheet template was downloaded.`
+      );
+    } else {
+      setExportNotice(
+        `Successfully exported ${result.count} assigned duty record(s) for ${placeName}${dateDesc} into ${result.filename}! Opening in Excel...`
+      );
+    }
     setTimeout(() => {
       setExportNotice(null);
     }, 6000);
@@ -102,12 +112,16 @@ export const ExportJobsCard: React.FC<ExportJobsCardProps> = ({
               className="export-native-select"
               value={workPlace}
               onChange={(e) => handleWorkPlaceChange(e.target.value)}
+              title="Filter duties by workplace city for Excel export"
             >
               <option value="All Places">All Places</option>
               <option value="Mysore">Mysore</option>
-              <option value="Mangaluru">Mangaluru</option>
-              <option value="Bangalore">Bangalore</option>
+              <option value="Bengaluru">Bengaluru</option>
+              <option value="Mangalore">Mangalore</option>
               <option value="Shivamogga">Shivamogga</option>
+              <option value="Mandya">Mandya</option>
+              <option value="Davanagere">Davanagere</option>
+              <option value="Dharwad">Dharwad</option>
             </select>
           </div>
         </div>

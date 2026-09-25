@@ -55,7 +55,7 @@ export const IdentityVerificationScreen: React.FC = () => {
     // If this employee resource ID has already completed verification in backend, bypass directly to dashboard!
     const isAlreadyVerified = Boolean(
       user.isIdentityVerified ||
-      (user.aadhaarNumber && user.aadhaarNumber.trim().length >= 10 && user.panNumber && user.panNumber.trim().length >= 10) ||
+      (user.aadhaarNumber && user.aadhaarNumber.trim().length >= 10 && user.panNumber && user.panNumber.trim().length >= 8) ||
       localStorage.getItem('identity_verified_' + user.resourceId) === 'true' ||
       sessionStorage.getItem('identity_verified_' + user.resourceId) === 'true'
     );
@@ -111,20 +111,21 @@ export const IdentityVerificationScreen: React.FC = () => {
   };
 
   const rawAadhaar = aadhaarInput.replace(/\s+/g, '');
-  const isAadhaarValid = rawAadhaar.length === 12;
-  const isPanValid = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(panInput.trim());
+  const cleanPan = panInput.trim().toUpperCase();
+  const isAadhaarValid = rawAadhaar.length >= 10 && rawAadhaar.length <= 12 && /^\d+$/.test(rawAadhaar);
+  const isPanValid = cleanPan.length >= 8 && cleanPan.length <= 10 && /^[A-Z0-9]+$/.test(cleanPan);
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!employee) return;
 
     if (!isAadhaarValid) {
-      setError('Please enter a valid 12-digit Aadhaar Card Number.');
+      setError('Please enter a valid Aadhaar Card Number (10 to 12 digits).');
       return;
     }
 
     if (!isPanValid) {
-      setError('Please enter a valid 10-character alphanumeric PAN Card Number (e.g., ABCDE1234F).');
+      setError('Please enter a valid PAN Card Number (e.g., ABCD1234F or ABCDE1234F).');
       return;
     }
 
@@ -245,11 +246,11 @@ export const IdentityVerificationScreen: React.FC = () => {
           <div className="step-status-pills">
             <div className={`step-check-item ${isAadhaarValid ? 'done' : 'pending'}`}>
               <CheckCircle2 size={16} />
-              <span>Aadhaar: {isAadhaarValid ? 'Valid 12 Digits' : 'Required'}</span>
+              <span>Aadhaar: {isAadhaarValid ? `Valid (${rawAadhaar.length} Digits)` : 'Required'}</span>
             </div>
             <div className={`step-check-item ${isPanValid ? 'done' : 'pending'}`}>
               <CheckCircle2 size={16} />
-              <span>PAN: {isPanValid ? 'Valid 10 Digits' : 'Required'}</span>
+              <span>PAN: {isPanValid ? `Valid (${cleanPan.length} Chars)` : 'Required'}</span>
             </div>
           </div>
         </div>
@@ -488,7 +489,7 @@ export const IdentityVerificationScreen: React.FC = () => {
               <button
                 type="submit"
                 className={`btn-verify-primary ${(!isAadhaarValid || !isPanValid || !confirmed || submitting) ? 'disabled' : ''}`}
-                disabled={!isAadhaarValid || !isPanValid || !confirmed || submitting}
+                disabled={submitting}
               >
                 {submitting ? (
                   <>

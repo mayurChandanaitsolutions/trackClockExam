@@ -25,6 +25,62 @@ export const matchesWorkPlace = (itemCity: string | undefined, filterPlace: stri
 };
 
 /**
+ * Normalizes various date string representations (e.g., 'YYYY-MM-DD', 'DD Mon YYYY', 'DD-MM-YYYY', ISO)
+ * into a standard 'YYYY-MM-DD' format for accurate chronological string comparison.
+ */
+export const normalizeDateToYMD = (dateStr?: string | null): string | null => {
+  if (!dateStr || !dateStr.trim()) return null;
+  const str = dateStr.trim();
+
+  // 1. YYYY-MM-DD or YYYY/MM/DD
+  const ymdMatch = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (ymdMatch) {
+    const y = ymdMatch[1];
+    const m = ymdMatch[2].padStart(2, '0');
+    const d = ymdMatch[3].padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  // 2. DD-MM-YYYY or DD/MM/YYYY
+  const dmyMatch = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+  if (dmyMatch) {
+    const d = dmyMatch[1].padStart(2, '0');
+    const m = dmyMatch[2].padStart(2, '0');
+    const y = dmyMatch[3];
+    return `${y}-${m}-${d}`;
+  }
+
+  // 3. Textual month names (e.g. "30 Aug 2026", "18 Sep 2026", "August 30, 2026")
+  const monthMap: Record<string, string> = {
+    jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
+    jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12',
+  };
+  const lower = str.toLowerCase();
+  for (const [mName, mNum] of Object.entries(monthMap)) {
+    if (lower.includes(mName)) {
+      const yearMatch = str.match(/\b(20\d\d)\b/);
+      if (yearMatch) {
+        const y = yearMatch[1];
+        const dayMatch = str.replace(yearMatch[1], '').match(/\b([0-2]?[1-9]|[1-3]0|31)\b/);
+        const d = dayMatch ? dayMatch[1].padStart(2, '0') : '01';
+        return `${y}-${mNum}-${d}`;
+      }
+    }
+  }
+
+  // 4. Standard Date parsing fallback
+  const parsed = new Date(str);
+  if (!isNaN(parsed.getTime())) {
+    const y = parsed.getFullYear();
+    const m = String(parsed.getMonth() + 1).padStart(2, '0');
+    const d = String(parsed.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  return null;
+};
+
+/**
  * Exports assigned employee duty and master workforce details to a real, styled .xlsx file
  * with dark colored highlighted main headings, custom column widths, and proper cell types.
  */
@@ -43,19 +99,30 @@ export const exportDutiesToExcel = (
   // Filter duties according to From Date, To Date, and Work Place
   const filteredDuties = duties.filter((d) => {
     // Work place filter
-    const dutyCity = d.city?.name || d.employee?.city || '';
+    const resId = d.employee?.resourceId || '';
+    const fullEmp = empMap.get(resId.toLowerCase().trim()) || empMap.get((d.employeeId || '').toLowerCase().trim());
+    const dutyCity = d.city?.name || fullEmp?.city || d.employee?.city || '';
     if (!matchesWorkPlace(dutyCity, filters.workPlace || 'All Places')) {
       return false;
     }
 
+    // Date filters (normalized to YYYY-MM-DD for accurate comparison)
+    const dutyYMD = normalizeDateToYMD(d.dutyDate);
+
     // From Date filter
-    if (filters.fromDate && d.dutyDate) {
-      if (d.dutyDate < filters.fromDate) return false;
+    if (filters.fromDate) {
+      const fromYMD = normalizeDateToYMD(filters.fromDate);
+      if (fromYMD) {
+        if (!dutyYMD || dutyYMD < fromYMD) return false;
+      }
     }
 
     // To Date filter
-    if (filters.toDate && d.dutyDate) {
-      if (d.dutyDate > filters.toDate) return false;
+    if (filters.toDate) {
+      const toYMD = normalizeDateToYMD(filters.toDate);
+      if (toYMD) {
+        if (!dutyYMD || dutyYMD > toYMD) return false;
+      }
     }
 
     return true;
@@ -83,64 +150,35 @@ export const exportDutiesToExcel = (
 
   const rows: (string | number)[][] = [headers];
 
-  if (filteredDuties.length > 0) {
-    filteredDuties.forEach((d, idx) => {
-      const resId = d.employee?.resourceId || '';
-      const fullEmp = empMap.get(resId.toLowerCase().trim()) || empMap.get((d.employeeId || '').toLowerCase().trim());
+  filteredDuties.forEach((d, idx) => {
+    const resId = d.employee?.resourceId || '';
+    const fullEmp = empMap.get(resId.toLowerCase().trim()) || empMap.get((d.employeeId || '').toLowerCase().trim());
 
-      const mobileStr = String(fullEmp?.mobile || d.employee?.mobile || '—');
-      const aadhaarStr = String(fullEmp?.aadhaarNumber || '—');
-      const panStr = String(fullEmp?.panNumber || '—');
-      const dateStr = String(d.dutyDate || '—');
+    const mobileStr = String(fullEmp?.mobile || d.employee?.mobile || '—');
+    const aadhaarStr = String(fullEmp?.aadhaarNumber || '—');
+    const panStr = String(fullEmp?.panNumber || '—');
+    const dateStr = String(d.dutyDate || '—');
 
-      rows.push([
-        idx + 1,
-        dateStr,
-        String(resId || '—'),
-        String(d.employee?.name || fullEmp?.name || '—'),
-        mobileStr,
-        String(fullEmp?.email || d.employee?.email || '—'),
-        String(d.city?.name || fullEmp?.city || d.employee?.city || '—'),
-        aadhaarStr,
-        panStr,
-        String(d.exam?.name || '—'),
-        String(d.dutyType || d.exam?.type || 'Exam'),
-        String(d.center?.centerName || '—'),
-        String(d.center?.centerCode || '—'),
-        String(d.role?.name || d.role?.code || '—'),
-        String(d.shift?.name || '—'),
-        String(d.reportingTime || '—'),
-        String(d.shiftEndTime || '—'),
-      ]);
-    });
-  } else {
-    // If no duty records match the date filter, export the registered employees
-    const matchingEmployees = employees.filter((e) =>
-      matchesWorkPlace(e.city, filters.workPlace || 'All Places')
-    );
-
-    matchingEmployees.forEach((emp, idx) => {
-      rows.push([
-        idx + 1,
-        'Not Assigned',
-        String(emp.resourceId || '—'),
-        String(emp.name || '—'),
-        String(emp.mobile || '—'),
-        String(emp.email || '—'),
-        String(emp.city || '—'),
-        String(emp.aadhaarNumber || '—'),
-        String(emp.panNumber || '—'),
-        '—',
-        '—',
-        '—',
-        '—',
-        String(emp.role || 'Invigilator'),
-        '—',
-        '—',
-        '—',
-      ]);
-    });
-  }
+    rows.push([
+      idx + 1,
+      dateStr,
+      String(resId || '—'),
+      String(d.employee?.name || fullEmp?.name || '—'),
+      mobileStr,
+      String(fullEmp?.email || d.employee?.email || '—'),
+      String(d.city?.name || fullEmp?.city || d.employee?.city || '—'),
+      aadhaarStr,
+      panStr,
+      String(d.exam?.name || '—'),
+      String(d.dutyType || d.exam?.type || 'Exam'),
+      String(d.center?.centerName || '—'),
+      String(d.center?.centerCode || '—'),
+      String(d.role?.name || d.role?.code || '—'),
+      String(d.shift?.name || '—'),
+      String(d.reportingTime || '—'),
+      String(d.shiftEndTime || '—'),
+    ]);
+  });
 
   // Create worksheet from Array of Arrays
   const ws = XLSX.utils.aoa_to_sheet(rows);
@@ -283,8 +321,8 @@ export const exportEmployeesToExcel = (
     return matchesWorkPlace(emp.city, workPlace);
   });
 
-  // Ensure target list is not empty if the incoming employees array already contains matching items
-  const targetEmployees = filteredEmployees.length > 0 ? filteredEmployees : employees;
+  // Use filtered employees matching selected workplace (or all if All Places selected)
+  const targetEmployees = filteredEmployees;
 
   const headers = [
     'SL NO',
