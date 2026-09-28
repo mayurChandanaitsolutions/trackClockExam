@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Duties - Exam Duty Management System</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="brand-icon">⏱️</div>
+        <div>
+          <div class="brand-title">TrackClock</div>
+          <div class="brand-subtitle">Exam Duty System</div>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav" id="sidebarNav"></nav>
+
+      <div class="sidebar-footer">
+        <div class="user-badge">
+          <div class="user-avatar" id="avatarInitial">U</div>
+          <div class="user-meta">
+            <span class="user-name user-name-display">Loading...</span>
+            <span class="user-role user-role-display">Role</span>
+          </div>
+        </div>
+        <button onclick="App.logout()" class="btn btn-outline btn-sm" title="Log Out">🚪</button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <div class="main-wrapper">
+      <header class="topbar">
+        <div style="display: flex; align-items: center; gap: 14px;">
+          <button class="mobile-menu-btn" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</button>
+          <h2 style="font-size: 19px; font-weight: 700; color: #0F172A;" id="pageHeader">Duty Assignments & Roster</h2>
+        </div>
+        <div>
+          <a href="add-duty.html" class="btn btn-primary btn-sm">+ Add Duty</a>
+        </div>
+      </header>
+
+      <main class="content-body">
+        <div id="tableAlert"></div>
+
+        <!-- Filter Bar -->
+        <div class="card" style="padding: 16px 20px; margin-bottom: 20px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+              <label style="font-size: 13.5px; font-weight: 700; color: #475569;">Filter by Status:</label>
+              <select id="filterStatus" class="form-select" style="width: auto; height: 38px; font-size: 13.5px;" onchange="loadDuties()">
+                <option value="">All Statuses</option>
+                <option value="Pending">Pending Review</option>
+                <option value="Approved">Approved</option>
+                <option value="Rejected">Rejected</option>
+              </select>
+
+              <label style="font-size: 13.5px; font-weight: 700; color: #475569; margin-left: 8px;">Date:</label>
+              <input type="date" id="filterDate" class="form-control" style="width: auto; height: 38px; font-size: 13.5px;" onchange="loadDuties()">
+            </div>
+
+            <button class="btn btn-outline btn-sm" onclick="resetFilters()">Reset Filters</button>
+          </div>
+        </div>
+
+        <!-- Duties Table Card -->
+        <div class="card">
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Resource ID</th>
+                  <th>Staff Name</th>
+                  <th>Duty Date</th>
+                  <th>Exam Name</th>
+                  <th>Center Name</th>
+                  <th>Role</th>
+                  <th>Shift & Timings</th>
+                  <th>Status</th>
+                  <th>Attendance Proof</th>
+                  <th id="actionsHeader">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="dutiesTableBody">
+                <tr>
+                  <td colspan="10" style="text-align: center; color: #64748B; padding: 28px;">Loading duty records...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+  <script>
+    const user = App.requireAuth();
+
+    if (!user.isAdmin) {
+      document.getElementById('pageHeader').textContent = 'My Duty Assignments';
+      document.getElementById('actionsHeader').style.display = 'none';
+    }
+
+    async function loadDuties() {
+      App.clearAlert('tableAlert');
+      const tbody = document.getElementById('dutiesTableBody');
+
+      const status = document.getElementById('filterStatus').value;
+      const date = document.getElementById('filterDate').value;
+
+      const params = new URLSearchParams();
+      if (!user.isAdmin) {
+        params.append('resourceId', user.resourceId);
+      }
+      if (status) params.append('status', status);
+      if (date) params.append('date', date);
+
+      try {
+        const res = await fetch(`api/duties/list.php?${params.toString()}`);
+        const result = await res.json();
+
+        if (result.success && Array.isArray(result.data)) {
+          const duties = result.data;
+
+          if (duties.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #64748B; padding: 32px;">No duties found matching the criteria.</td></tr>`;
+            return;
+          }
+
+          tbody.innerHTML = duties.map(d => {
+            const badgeClass = d.status === 'Approved' ? 'badge-approved' : d.status === 'Rejected' ? 'badge-rejected' : 'badge-pending';
+            const proofHtml = d.attendanceFilePath 
+              ? `<a href="${d.attendanceFilePath}" target="_blank" style="color: #2563EB; font-weight: 700; text-decoration: underline;">📷 View Image</a>` 
+              : `<span style="color: #94A3B8; font-size: 12.5px;">Pending Proof</span>`;
+
+            let actionHtml = '';
+            if (user.isAdmin) {
+              actionHtml = `
+                <td>
+                  <div style="display: flex; gap: 6px;">
+                    ${d.status !== 'Approved' ? `<button class="btn btn-outline btn-sm" style="color: #16A34A; border-color: #86EFAC;" onclick="updateStatus(${d.id}, 'Approved')">Approve</button>` : ''}
+                    ${d.status !== 'Rejected' ? `<button class="btn btn-outline btn-sm" style="color: #DC2626; border-color: #FECACA;" onclick="updateStatus(${d.id}, 'Rejected')">Reject</button>` : ''}
+                  </div>
+                </td>
+              `;
+            }
+
+            return `
+              <tr>
+                <td><strong>${d.resourceId}</strong></td>
+                <td>${d.employeeName}</td>
+                <td>${d.dutyDate}</td>
+                <td>${d.examName}</td>
+                <td>${d.centerName} <small style="color: #64748B;">(${d.centerCode})</small></td>
+                <td><span style="font-weight: 600; color: #1E3A8A;">${d.roleName}</span></td>
+                <td>
+                  <div>${d.shiftName}</div>
+                  <small style="color: #64748B;">${d.reportingTime || ''} - ${d.shiftEndTime || ''}</small>
+                </td>
+                <td><span class="badge ${badgeClass}">${d.status}</span></td>
+                <td>${proofHtml}</td>
+                ${actionHtml}
+              </tr>
+            `;
+          }).join('');
+        }
+      } catch (err) {
+        console.error(err);
+        tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #DC2626; padding: 24px;">Failed to load duties from server.</td></tr>`;
+      }
+    }
+
+    async function updateStatus(dutyId, newStatus) {
+      if (!confirm(`Are you sure you want to change status to "${newStatus}"?`)) return;
+
+      try {
+        const res = await fetch('api/duties/update_status.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dutyId, status: newStatus })
+        });
+        const data = await res.json();
+        if (data.success) {
+          App.showAlert('tableAlert', data.message, 'success');
+          loadDuties();
+        } else {
+          App.showAlert('tableAlert', data.message || 'Status update failed.');
+        }
+      } catch (err) {
+        console.error(err);
+        App.showAlert('tableAlert', 'Server connection error updating status.');
+      }
+    }
+
+    function resetFilters() {
+      document.getElementById('filterStatus').value = '';
+      document.getElementById('filterDate').value = '';
+      loadDuties();
+    }
+
+    loadDuties();
+  </script>
+</body>
+</html>

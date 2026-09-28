@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Add Duty Assignment - Exam Duty Management System</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="brand-icon">⏱️</div>
+        <div>
+          <div class="brand-title">TrackClock</div>
+          <div class="brand-subtitle">Exam Duty System</div>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav" id="sidebarNav"></nav>
+
+      <div class="sidebar-footer">
+        <div class="user-badge">
+          <div class="user-avatar" id="avatarInitial">U</div>
+          <div class="user-meta">
+            <span class="user-name user-name-display">Loading...</span>
+            <span class="user-role user-role-display">Role</span>
+          </div>
+        </div>
+        <button onclick="App.logout()" class="btn btn-outline btn-sm" title="Log Out">🚪</button>
+      </div>
+    </aside>
+
+    <!-- Main Wrapper -->
+    <div class="main-wrapper">
+      <header class="topbar">
+        <div style="display: flex; align-items: center; gap: 14px;">
+          <button class="mobile-menu-btn" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</button>
+          <h2 style="font-size: 19px; font-weight: 700; color: #0F172A;" id="pageTitleHeading">Assign Duty to Employee</h2>
+        </div>
+        <div>
+          <a href="dashboard.html" class="btn btn-outline btn-sm">&larr; Back to Dashboard</a>
+        </div>
+      </header>
+
+      <main class="content-body">
+        <div id="formAlert"></div>
+
+        <div class="card" style="max-width: 900px; margin: 0 auto;">
+          <form id="dutyForm">
+            <!-- Hidden inputs -->
+            <input type="hidden" id="hiddenAttendanceFileId" value="">
+            <input type="file" id="attendanceFileInput" accept="image/*" style="display: none;">
+            <input type="file" id="deviceCamInput" accept="image/*" capture="environment" style="display: none;">
+
+            <!-- 1. Assigned Workforce Member -->
+            <div class="form-group" id="employeeSelectGroup">
+              <label class="form-label" for="employeeSelect">1. ASSIGN DUTY TO EMPLOYEE *</label>
+              <select id="employeeSelect" class="form-select" required>
+                <option value="" disabled selected>-- Select Registered Employee --</option>
+              </select>
+            </div>
+
+            <div class="form-group" id="employeeFixedDisplay" style="display: none;">
+              <label class="form-label">ASSIGNED EMPLOYEE</label>
+              <div style="padding: 12px 14px; background: #F8FAFC; border: 1.5px solid #E2E8F0; border-radius: var(--radius-md); font-weight: 600; font-size: 14.5px;">
+                <span id="fixedEmployeeName">Self</span>
+              </div>
+            </div>
+
+            <!-- 2. Date and Duty Type -->
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label class="form-label" for="dutyDate">2. DUTY DATE *</label>
+                <input type="date" id="dutyDate" class="form-control" required>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">3. TYPE OF DUTY *</label>
+                <div style="display: flex; gap: 8px;">
+                  <button type="button" id="btnDutyExam" class="btn btn-primary" style="flex: 1; height: 44px;" onclick="setDutyType('Exam')">Exam</button>
+                  <button type="button" id="btnDutyMock" class="btn btn-outline" style="flex: 1; height: 44px;" onclick="setDutyType('Mock')">Mock</button>
+                </div>
+                <input type="hidden" id="dutyType" value="Exam">
+              </div>
+            </div>
+
+            <!-- 3. Exam Name Selection -->
+            <div class="form-group">
+              <label class="form-label" for="examSelect">4. EXAM NAME *</label>
+              <select id="examSelect" class="form-select" required>
+                <option value="" disabled selected>-- Select Exam / Mock Drill --</option>
+              </select>
+            </div>
+
+            <!-- 4. City and Exam Center -->
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label class="form-label" for="citySelect">5. CITY / REGION *</label>
+                <select id="citySelect" class="form-select" required>
+                  <option value="" disabled selected>-- Select City --</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="centerSelect">6. EXAM TEST CENTER *</label>
+                <select id="centerSelect" class="form-select" required>
+                  <option value="" disabled selected>-- Select Exam Center --</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- 5. Duty Role & Shift Selection -->
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label class="form-label" for="roleSelect">7. DUTY ROLE *</label>
+                <select id="roleSelect" class="form-select" required>
+                  <option value="" disabled selected>-- Select Authorized Duty Role --</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="shiftSelect">8. SHIFT *</label>
+                <select id="shiftSelect" class="form-select" required>
+                  <option value="" disabled selected>-- Select Shift --</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- 6. Reporting and End Times -->
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label class="form-label" for="reportingTime">9. REPORTING TIME *</label>
+                <input type="text" id="reportingTime" class="form-control" placeholder="e.g. 07:30 AM" required>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="shiftEndTime">10. SHIFT END TIME *</label>
+                <input type="text" id="shiftEndTime" class="form-control" placeholder="e.g. 01:30 PM" required>
+              </div>
+            </div>
+
+            <!-- 7. ATTENDANCE PROOF (CAMERA / IMAGE ONLY) -->
+            <div class="form-group" style="margin-top: 10px;">
+              <label class="form-label" style="text-align: center; display: block; margin-bottom: 8px;">
+                11. ATTENDANCE PROOF (CAMERA / IMAGE ONLY) *
+              </label>
+
+              <div class="attendance-upload-card">
+                <!-- Initial State: Prompt & Buttons -->
+                <div id="attendanceUploadPrompt">
+                  <p style="margin: 0 0 10px 0; font-size: 14px; color: #DC2626; font-weight: 700;">
+                    Please upload clear image of the attendance sheet
+                  </p>
+                  <div class="upload-button-row">
+                    <!-- Option 1: Live Camera -->
+                    <button type="button" class="btn btn-primary" onclick="CameraManager.startLiveCamera()">
+                      <span>📷</span>
+                      <span>Take Photo (Camera)</span>
+                    </button>
+                    <!-- Option 2: Upload Files -->
+                    <button type="button" class="btn btn-outline" onclick="document.getElementById('attendanceFileInput').click()">
+                      <span>📁</span>
+                      <span>Upload Photo (Files)</span>
+                    </button>
+                  </div>
+                  <span style="display: block; margin-top: 10px; font-size: 12px; color: #64748B;">
+                    Supports JPG, PNG, WEBP only (Documents/PDFs disabled)
+                  </span>
+                </div>
+
+                <!-- Uploaded State: Preview & Action Buttons -->
+                <div id="attendancePreviewContainer" class="attendance-preview-box" style="display: none;">
+                  <div style="display: flex; align-items: center; gap: 12px;">
+                    <img id="attendanceThumb" src="" alt="Proof Preview" class="preview-thumb" onclick="CameraManager.viewFullPreview()">
+                    <div style="text-align: left;">
+                      <div id="attendanceFileName" style="font-size: 13.5px; font-weight: 700; color: #0F172A;">file.jpg</div>
+                      <div style="font-size: 12px; color: #16A34A; font-weight: 600;">✓ Ready to Submit</div>
+                    </div>
+                  </div>
+                  <div style="display: flex; gap: 8px;">
+                    <button type="button" class="btn btn-outline btn-sm" onclick="CameraManager.viewFullPreview()">Preview</button>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="CameraManager.startLiveCamera()">📷 Retake</button>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('attendanceFileInput').click()">📁 File</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Submit Button (Centered) -->
+            <div style="display: flex; justify-content: center; margin-top: 28px;">
+              <button type="submit" id="submitDutyBtn" class="btn btn-primary" style="padding: 14px 44px; font-size: 16px; font-weight: 700; min-width: 280px; border-radius: 10px;">
+                Submit Duty Assignment
+              </button>
+            </div>
+          </form>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Live Camera Viewfinder Modal -->
+  <div id="cameraModal" class="camera-modal-backdrop" style="display: none;" onclick="CameraManager.stopLiveCamera()">
+    <div class="camera-modal-card" onclick="event.stopPropagation()">
+      <div class="camera-modal-header">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 20px;">📷</span>
+          <div>
+            <h4 style="margin: 0; font-size: 16px; font-weight: 700;">Take Attendance Photo</h4>
+            <span style="font-size: 12px; color: #94A3B8;">Align attendance sheet within the camera guide</span>
+          </div>
+        </div>
+        <button type="button" style="background: none; border: none; color: #94A3B8; font-size: 20px; cursor: pointer;" onclick="CameraManager.stopLiveCamera()">✕</button>
+      </div>
+
+      <div class="camera-viewfinder-wrapper">
+        <video id="cameraVideo" class="camera-video" autoplay playsinline muted></video>
+        <div class="camera-overlay-guide"></div>
+        <div class="camera-overlay-tag">Point camera at attendance sheet</div>
+      </div>
+
+      <div class="camera-modal-footer">
+        <button type="button" class="btn btn-outline btn-sm" onclick="CameraManager.stopLiveCamera()">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="CameraManager.capturePhoto()" style="padding: 12px 28px; font-size: 14.5px;">
+          <span>📷</span>
+          <span>Capture Photo</span>
+        </button>
+        <button type="button" class="btn btn-outline btn-sm" onclick="CameraManager.stopLiveCamera(); document.getElementById('deviceCamInput').click();">
+          Device Camera
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fullscreen Preview Modal -->
+  <div id="imagePreviewModal" class="camera-modal-backdrop" style="display: none;" onclick="CameraManager.closeFullPreview()">
+    <div style="position: relative; max-width: 90vw; max-height: 85vh;" onclick="event.stopPropagation()">
+      <button type="button" style="position: absolute; top: -40px; right: 0; background: #FFFFFF; border: none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; font-weight: 800;" onclick="CameraManager.closeFullPreview()">✕</button>
+      <img id="fullPreviewImg" src="" alt="Full Preview" style="max-width: 100%; max-height: 80vh; border-radius: 12px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5);">
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+  <script src="js/camera.js"></script>
+  <script>
+    const user = App.requireAuth();
+    CameraManager.init();
+
+    // Set page heading & mode based on role
+    if (!user.isAdmin) {
+      document.getElementById('pageTitleHeading').textContent = 'Add New Duty';
+      document.getElementById('employeeSelectGroup').style.display = 'none';
+      document.getElementById('employeeFixedDisplay').style.display = 'block';
+      document.getElementById('fixedEmployeeName').textContent = `${user.name} (ID: ${user.resourceId})`;
+    }
+
+    // Set today as default date
+    document.getElementById('dutyDate').value = new Date().toISOString().split('T')[0];
+
+    let masterData = { cities: [], centers: [], exams: [], roles: [], shifts: [], employees: [] };
+
+    // Fetch master options
+    async function loadMasterData() {
+      try {
+        const res = await fetch('api/master/get_all.php');
+        const json = await res.json();
+        if (json.success && json.data) {
+          masterData = json.data;
+
+          // 1. Populate Employees (if Admin)
+          const empSelect = document.getElementById('employeeSelect');
+          empSelect.innerHTML = `<option value="" disabled selected>-- Select Registered Employee --</option>` + 
+            masterData.employees.map(e => `<option value="${e.id}">${e.name} (ID: ${e.resourceId}) - ${e.city}</option>`).join('');
+
+          // 2. Populate Exams
+          renderExams('Exam');
+
+          // 3. Populate Cities
+          const citySelect = document.getElementById('citySelect');
+          citySelect.innerHTML = `<option value="" disabled selected>-- Select City --</option>` +
+            masterData.cities.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+
+          // 4. Populate Roles
+          const roleSelect = document.getElementById('roleSelect');
+          roleSelect.innerHTML = `<option value="" disabled selected>-- Select Authorized Duty Role --</option>` +
+            masterData.roles.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
+
+          // 5. Populate Shifts
+          const shiftSelect = document.getElementById('shiftSelect');
+          shiftSelect.innerHTML = `<option value="" disabled selected>-- Select Shift --</option>` +
+            masterData.shifts.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+
+          // Default auto-selections
+          if (masterData.cities.length > 0) {
+            citySelect.value = masterData.cities[0].id;
+            updateCentersForCity(masterData.cities[0].id);
+          }
+          if (masterData.roles.length > 0) roleSelect.value = masterData.roles[0].id;
+          if (masterData.shifts.length > 0) {
+            shiftSelect.value = masterData.shifts[0].id;
+            updateShiftTimes(masterData.shifts[0].id);
+          }
+        }
+      } catch (err) {
+        console.error('Master data load failed', err);
+      }
+    }
+
+    // Filter exams by duty type
+    function renderExams(type) {
+      const examSelect = document.getElementById('examSelect');
+      const filtered = masterData.exams.filter(x => x.type === type);
+      examSelect.innerHTML = `<option value="" disabled selected>-- Select ${type} --</option>` +
+        (filtered.length ? filtered : masterData.exams).map(x => `<option value="${x.id}">${x.name}</option>`).join('');
+      if (filtered.length > 0) examSelect.value = filtered[0].id;
+    }
+
+    // Handle Duty Type toggle
+    function setDutyType(type) {
+      document.getElementById('dutyType').value = type;
+      if (type === 'Exam') {
+        document.getElementById('btnDutyExam').className = 'btn btn-primary';
+        document.getElementById('btnDutyMock').className = 'btn btn-outline';
+      } else {
+        document.getElementById('btnDutyExam').className = 'btn btn-outline';
+        document.getElementById('btnDutyMock').className = 'btn btn-primary';
+      }
+      renderExams(type);
+    }
+
+    // Filter centers based on selected city
+    function updateCentersForCity(cityId) {
+      const centerSelect = document.getElementById('centerSelect');
+      const inCity = masterData.centers.filter(c => String(c.cityId) === String(cityId));
+      const list = inCity.length ? inCity : masterData.centers;
+
+      centerSelect.innerHTML = `<option value="" disabled selected>-- Select Exam Center --</option>` +
+        list.map(c => `<option value="${c.id}">${c.centerName} (${c.centerCode})</option>`).join('');
+
+      if (list.length > 0) centerSelect.value = list[0].id;
+    }
+
+    // Update default reporting & end times when shift changes
+    function updateShiftTimes(shiftId) {
+      const shift = masterData.shifts.find(s => String(s.id) === String(shiftId));
+      if (shift) {
+        if (shift.defaultReportingTime) document.getElementById('reportingTime').value = shift.defaultReportingTime;
+        if (shift.defaultEndTime) document.getElementById('shiftEndTime').value = shift.defaultEndTime;
+      }
+    }
+
+    // Event Listeners for Dynamic Dropdowns
+    document.getElementById('citySelect').addEventListener('change', (e) => updateCentersForCity(e.target.value));
+    document.getElementById('shiftSelect').addEventListener('change', (e) => updateShiftTimes(e.target.value));
+
+    // Form Submission Handler
+    document.getElementById('dutyForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      App.clearAlert('formAlert');
+
+      const submitBtn = document.getElementById('submitDutyBtn');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Submitting Duty...';
+
+      const payload = {
+        employeeId: user.isAdmin ? parseInt(document.getElementById('employeeSelect').value) : user.id,
+        resourceId: user.resourceId,
+        dutyDate: document.getElementById('dutyDate').value,
+        dutyType: document.getElementById('dutyType').value,
+        examId: parseInt(document.getElementById('examSelect').value),
+        cityId: parseInt(document.getElementById('citySelect').value),
+        centerId: parseInt(document.getElementById('centerSelect').value),
+        roleId: parseInt(document.getElementById('roleSelect').value),
+        shiftId: parseInt(document.getElementById('shiftSelect').value),
+        reportingTime: document.getElementById('reportingTime').value,
+        shiftEndTime: document.getElementById('shiftEndTime').value,
+        attendanceFileId: document.getElementById('hiddenAttendanceFileId').value ? parseInt(document.getElementById('hiddenAttendanceFileId').value) : null
+      };
+
+      try {
+        const res = await fetch('api/duties/create.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          App.showAlert('formAlert', 'Duty assignment submitted successfully! Redirecting...', 'success');
+          setTimeout(() => window.location.href = 'my-duties.html', 1200);
+        } else {
+          App.showAlert('formAlert', data.message || 'Error creating duty assignment.');
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Submit Duty Assignment';
+        }
+      } catch (err) {
+        console.error(err);
+        App.showAlert('formAlert', 'Failed to submit duty. Server connection error.');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit Duty Assignment';
+      }
+    });
+
+    loadMasterData();
+  </script>
+</body>
+</html>

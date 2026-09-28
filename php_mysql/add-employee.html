@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Add Employee - Exam Duty Management System</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="brand-icon">⏱️</div>
+        <div>
+          <div class="brand-title">TrackClock</div>
+          <div class="brand-subtitle">Exam Duty System</div>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav" id="sidebarNav"></nav>
+
+      <div class="sidebar-footer">
+        <div class="user-badge">
+          <div class="user-avatar" id="avatarInitial">U</div>
+          <div class="user-meta">
+            <span class="user-name user-name-display">Loading...</span>
+            <span class="user-role user-role-display">Role</span>
+          </div>
+        </div>
+        <button onclick="App.logout()" class="btn btn-outline btn-sm" title="Log Out">🚪</button>
+      </div>
+    </aside>
+
+    <!-- Main Wrapper -->
+    <div class="main-wrapper">
+      <header class="topbar">
+        <div style="display: flex; align-items: center; gap: 14px;">
+          <button class="mobile-menu-btn" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</button>
+          <h2 style="font-size: 19px; font-weight: 700; color: #0F172A;">Register New Employee</h2>
+        </div>
+        <div>
+          <a href="dashboard.html" class="btn btn-outline btn-sm">&larr; Back to Dashboard</a>
+        </div>
+      </header>
+
+      <main class="content-body">
+        <div id="empAlert"></div>
+
+        <!-- Registration Form Card -->
+        <div class="card" style="max-width: 800px; margin: 0 auto 28px;">
+          <div class="card-header">
+            <h3 class="card-title">Employee Details</h3>
+          </div>
+
+          <form id="addEmpForm">
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label class="form-label" for="resId">Resource ID / Staff ID *</label>
+                <input type="text" id="resId" class="form-control" placeholder="e.g. 597400" required>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="empName">Full Name *</label>
+                <input type="text" id="empName" class="form-control" placeholder="e.g. Anand Kumar" required>
+              </div>
+            </div>
+
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label class="form-label" for="empMobile">Mobile Number (10 digits) *</label>
+                <input type="tel" id="empMobile" class="form-control" placeholder="e.g. 9876543217" required maxlength="10" pattern="[0-9]{10}">
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="empEmail">Email Address</label>
+                <input type="email" id="empEmail" class="form-control" placeholder="e.g. anand@examduty.in">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="empCity">City / Location *</label>
+              <select id="empCity" class="form-select" required>
+                <option value="Mysore" selected>Mysore</option>
+                <option value="Bengaluru">Bengaluru</option>
+                <option value="Mangaluru">Mangaluru</option>
+                <option value="Hubballi">Hubballi</option>
+              </select>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; margin-top: 20px;">
+              <button type="submit" id="saveEmpBtn" class="btn btn-primary" style="padding: 12px 28px;">
+                Register Employee
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Registered Employees Table -->
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Registered Workforce List</h3>
+          </div>
+
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Resource ID</th>
+                  <th>Employee Name</th>
+                  <th>Mobile Number</th>
+                  <th>Email</th>
+                  <th>City</th>
+                  <th>Role Type</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="empTableBody">
+                <tr><td colspan="7" style="text-align: center; padding: 20px;">Loading employees...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+  <script>
+    // Enforce Admin Only guard
+    const user = App.requireAuth(true);
+
+    async function loadEmployees() {
+      try {
+        const res = await fetch('api/employees/list.php');
+        const json = await res.json();
+        const tbody = document.getElementById('empTableBody');
+
+        if (json.success && Array.isArray(json.data)) {
+          tbody.innerHTML = json.data.map(e => `
+            <tr>
+              <td><strong>${e.resourceId}</strong></td>
+              <td>${e.name}</td>
+              <td>${e.mobile}</td>
+              <td>${e.email || '-'}</td>
+              <td>${e.city || 'Mysore'}</td>
+              <td>${e.isAdmin ? '<span class="badge badge-approved">Admin</span>' : '<span class="badge" style="background: #F1F5F9; color: #475569;">Staff</span>'}</td>
+              <td><span class="badge badge-approved">${e.status}</span></td>
+            </tr>
+          `).join('');
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    document.getElementById('addEmpForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      App.clearAlert('empAlert');
+
+      const btn = document.getElementById('saveEmpBtn');
+      btn.disabled = true;
+      btn.textContent = 'Registering...';
+
+      const payload = {
+        resourceId: document.getElementById('resId').value.trim(),
+        name: document.getElementById('empName').value.trim(),
+        mobile: document.getElementById('empMobile').value.trim(),
+        email: document.getElementById('empEmail').value.trim(),
+        city: document.getElementById('empCity').value
+      };
+
+      try {
+        const res = await fetch('api/employees/create.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          App.showAlert('empAlert', 'Employee registered successfully!', 'success');
+          document.getElementById('addEmpForm').reset();
+          loadEmployees();
+        } else {
+          App.showAlert('empAlert', data.message || 'Registration failed.');
+        }
+      } catch (err) {
+        console.error(err);
+        App.showAlert('empAlert', 'Server connection error.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Register Employee';
+      }
+    });
+
+    loadEmployees();
+  </script>
+</body>
+</html>
