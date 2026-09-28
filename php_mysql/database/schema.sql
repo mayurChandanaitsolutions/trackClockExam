@@ -8,12 +8,22 @@
 CREATE DATABASE IF NOT EXISTS `exam_duty_db` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE `exam_duty_db`;
 
+-- Temporarily disable foreign key checks for clean recreation
 SET FOREIGN_KEY_CHECKS = 0;
+
+-- Drop all child and parent tables in safe order
+DROP TABLE IF EXISTS `duties`;
+DROP TABLE IF EXISTS `attendance_files`;
+DROP TABLE IF EXISTS `centers`;
+DROP TABLE IF EXISTS `cities`;
+DROP TABLE IF EXISTS `exams`;
+DROP TABLE IF EXISTS `roles`;
+DROP TABLE IF EXISTS `shifts`;
+DROP TABLE IF EXISTS `employees`;
 
 -- -------------------------------------------------------------------------------------------------
 -- 1. TABLE: employees (Staff and Administrators)
 -- -------------------------------------------------------------------------------------------------
-DROP TABLE IF EXISTS `employees`;
 CREATE TABLE `employees` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `resource_id` VARCHAR(50) NOT NULL UNIQUE,
@@ -33,7 +43,6 @@ CREATE TABLE `employees` (
 -- -------------------------------------------------------------------------------------------------
 -- 2. TABLE: cities
 -- -------------------------------------------------------------------------------------------------
-DROP TABLE IF EXISTS `cities`;
 CREATE TABLE `cities` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `name` VARCHAR(100) NOT NULL UNIQUE,
@@ -44,7 +53,6 @@ CREATE TABLE `cities` (
 -- -------------------------------------------------------------------------------------------------
 -- 3. TABLE: centers (Exam Centers linked to Cities)
 -- -------------------------------------------------------------------------------------------------
-DROP TABLE IF EXISTS `centers`;
 CREATE TABLE `centers` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `center_code` VARCHAR(50) NOT NULL UNIQUE,
@@ -59,7 +67,6 @@ CREATE TABLE `centers` (
 -- -------------------------------------------------------------------------------------------------
 -- 4. TABLE: exams (All 12 Exams and Mock Drills)
 -- -------------------------------------------------------------------------------------------------
-DROP TABLE IF EXISTS `exams`;
 CREATE TABLE `exams` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `name` VARCHAR(100) NOT NULL UNIQUE,
@@ -71,7 +78,6 @@ CREATE TABLE `exams` (
 -- -------------------------------------------------------------------------------------------------
 -- 5. TABLE: roles (Duty Roles)
 -- -------------------------------------------------------------------------------------------------
-DROP TABLE IF EXISTS `roles`;
 CREATE TABLE `roles` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `name` VARCHAR(100) NOT NULL UNIQUE,
@@ -82,7 +88,6 @@ CREATE TABLE `roles` (
 -- -------------------------------------------------------------------------------------------------
 -- 6. TABLE: shifts (Work Shifts)
 -- -------------------------------------------------------------------------------------------------
-DROP TABLE IF EXISTS `shifts`;
 CREATE TABLE `shifts` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `name` VARCHAR(50) NOT NULL UNIQUE,
@@ -94,7 +99,6 @@ CREATE TABLE `shifts` (
 -- -------------------------------------------------------------------------------------------------
 -- 7. TABLE: attendance_files (Attendance Photo Uploads)
 -- -------------------------------------------------------------------------------------------------
-DROP TABLE IF EXISTS `attendance_files`;
 CREATE TABLE `attendance_files` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `original_name` VARCHAR(255) NOT NULL,
@@ -108,7 +112,6 @@ CREATE TABLE `attendance_files` (
 -- -------------------------------------------------------------------------------------------------
 -- 8. TABLE: duties (Primary Duty Assignments & Submissions Ledger)
 -- -------------------------------------------------------------------------------------------------
-DROP TABLE IF EXISTS `duties`;
 CREATE TABLE `duties` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `employee_id` INT NOT NULL,
@@ -139,6 +142,7 @@ CREATE TABLE `duties` (
     INDEX `idx_duties_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Re-enable foreign key checks
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- -------------------------------------------------------------------------------------------------
