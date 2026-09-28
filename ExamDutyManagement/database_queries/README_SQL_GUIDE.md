@@ -27,6 +27,7 @@ To set up everything in one go:
 | **`02_insert_master_data.sql`** | Inserts all master dropdown data (Bengaluru, Mysuru, TCS iON Centers, SSC CGL, RRB NTPC, Roles, Shifts). |
 | **`03_insert_employees_and_duties.sql`** | Seeds the primary test employees (`17655`, `17656`, `17657`) and baseline duties. |
 | **`05_how_to_add_new_employee_and_duty.sql`** | **Template for adding any new employee & assigning duties** in MSSQL. Any employee inserted here can log in immediately and all data is fetched live from the backend with zero hardcoding! |
+| **`06_view_all_duties_human_readable.sql`** | **Human-Readable Duties Query**: Displays full Employee Names, Exam Names, Centers, Cities, Roles, and Dates instead of raw GUID foreign keys. Creates `dbo.vw_duties`. |
 
 ---
 

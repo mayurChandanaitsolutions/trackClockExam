@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import masterService, { EmployeeItem } from '../services/master.service';
 import authService from '../services/auth.service';
+import { hasContinuousSequence } from '../utils/validation';
 
 export const AddEmployeeScreen: React.FC = () => {
   const navigate = useNavigate();
@@ -43,6 +44,30 @@ export const AddEmployeeScreen: React.FC = () => {
   const [aadhaarNumber, setAadhaarNumber] = useState<string>('');
   const [panNumber, setPanNumber] = useState<string>('');
   const [selectedCities, setSelectedCities] = useState<string[]>(['Mysore']);
+
+  // Real-time inline warnings for continuous sequences
+  const [mobileWarning, setMobileWarning] = useState<string | null>(null);
+  const [aadhaarWarning, setAadhaarWarning] = useState<string | null>(null);
+
+  const handleMobileChange = (val: string) => {
+    const digits = val.replace(/\D/g, '').slice(0, 10);
+    if (hasContinuousSequence(digits, 6)) {
+      setMobileWarning('Continuous numbers like 123456 are not allowed.');
+      return;
+    }
+    setMobileWarning(null);
+    setMobile(digits);
+  };
+
+  const handleAadhaarChange = (val: string) => {
+    const digits = val.replace(/\D/g, '').slice(0, 12);
+    if (hasContinuousSequence(digits, 6)) {
+      setAadhaarWarning('Continuous numbers like 123456 are not allowed.');
+      return;
+    }
+    setAadhaarWarning(null);
+    setAadhaarNumber(digits);
+  };
 
   // Modal State for viewing/editing details
   const [selectedModalResourceId, setSelectedModalResourceId] = useState<string | null>(null);
@@ -100,20 +125,49 @@ export const AddEmployeeScreen: React.FC = () => {
       setSubmitError('Please enter a Staff / Resource ID.');
       return;
     }
+    if (!/^\d+$/.test(resourceId.trim())) {
+      setSubmitError('Staff / Resource ID must contain numbers only (no letters or symbols).');
+      return;
+    }
     if (!name.trim()) {
       setSubmitError('Please enter Member Full Name.');
+      return;
+    }
+    if (!/^[a-zA-Z\s]+$/.test(name.trim())) {
+      setSubmitError('Member Full Name can only contain letters and spaces (no digits or symbols).');
       return;
     }
     if (!mobile.trim()) {
       setSubmitError('Please enter a Contact / Mobile Number.');
       return;
     }
+    if (!/^\d{10}$/.test(mobile.trim())) {
+      setSubmitError('Contact / Mobile Number must be exactly 10 digits (numbers only, no letters or symbols).');
+      return;
+    }
+    if (hasContinuousSequence(mobile.trim(), 6)) {
+      setSubmitError('Contact / Mobile Number cannot contain continuous sequential numbers like 123456.');
+      return;
+    }
     if (!email.trim()) {
       setSubmitError('Please enter an Email Address.');
       return;
     }
+    const emailLower = email.trim().toLowerCase();
+    if (!emailLower.endsWith('@gmail.com') || !/^[a-zA-Z0-9._%+-]+@gmail\.com$/.test(emailLower)) {
+      setSubmitError('Email Address must be a valid Gmail address ending with @gmail.com (e.g. user@gmail.com).');
+      return;
+    }
     if (!aadhaarNumber.trim()) {
       setSubmitError('Please enter Aadhaar Card Number.');
+      return;
+    }
+    if (!/^\d{12}$/.test(aadhaarNumber.trim())) {
+      setSubmitError('Aadhaar Card Number must be exactly 12 digits (numbers only, no letters or symbols).');
+      return;
+    }
+    if (hasContinuousSequence(aadhaarNumber.trim(), 6)) {
+      setSubmitError('Aadhaar Card Number cannot contain continuous sequential numbers like 123456.');
       return;
     }
     if (!panNumber.trim()) {
@@ -143,6 +197,7 @@ export const AddEmployeeScreen: React.FC = () => {
         resourceId: newEmp.resourceId,
         name: newEmp.name,
       });
+      console.log('%c✔ Database connected successfully', 'color: #16a34a; font-weight: bold; font-size: 14px;');
       setSubmitSuccess(`Employee "${newEmp.name}" (ID: ${newEmp.resourceId}) registered successfully in MSSQL!`);
 
       // Clear input fields
@@ -152,6 +207,8 @@ export const AddEmployeeScreen: React.FC = () => {
       setEmail('');
       setAadhaarNumber('');
       setPanNumber('');
+      setMobileWarning(null);
+      setAadhaarWarning(null);
       setSelectedCities(['Mysore']);
 
       // Refresh list
@@ -321,10 +378,21 @@ export const AddEmployeeScreen: React.FC = () => {
                     </label>
                     <input
                       type="text"
+                      inputMode="numeric"
                       className="form-input-control"
                       placeholder="e.g. 597305"
                       value={resourceId}
-                      onChange={(e) => setResourceId(e.target.value)}
+                      onChange={(e) => setResourceId(e.target.value.replace(/\D/g, ''))}
+                      onKeyDown={(e) => {
+                        if (
+                          !/[0-9]/.test(e.key) &&
+                          !['Backspace', 'Tab', 'Enter', 'ArrowLeft', 'ArrowRight', 'Delete'].includes(e.key) &&
+                          !e.ctrlKey &&
+                          !e.metaKey
+                        ) {
+                          e.preventDefault();
+                        }
+                      }}
                       required
                       style={{ marginTop: '6px' }}
                     />
@@ -339,9 +407,19 @@ export const AddEmployeeScreen: React.FC = () => {
                     <input
                       type="text"
                       className="form-input-control"
-                      placeholder="e.g. Dr. Rajesh Sharma"
+                      placeholder="e.g. Rajesh Sharma"
                       value={name}
-                      onChange={(e) => setName(e.target.value)}
+                      onChange={(e) => setName(e.target.value.replace(/[^a-zA-Z\s]/g, ''))}
+                      onKeyDown={(e) => {
+                        if (
+                          !/[a-zA-Z\s]/.test(e.key) &&
+                          !['Backspace', 'Tab', 'Enter', 'ArrowLeft', 'ArrowRight', 'Delete', ' '].includes(e.key) &&
+                          !e.ctrlKey &&
+                          !e.metaKey
+                        ) {
+                          e.preventDefault();
+                        }
+                      }}
                       required
                       style={{ marginTop: '6px' }}
                     />
@@ -355,13 +433,44 @@ export const AddEmployeeScreen: React.FC = () => {
                     </label>
                     <input
                       type="tel"
+                      inputMode="numeric"
+                      maxLength={10}
                       className="form-input-control"
-                      placeholder="e.g. 9845123456"
+                      placeholder="e.g. 9845281743"
                       value={mobile}
-                      onChange={(e) => setMobile(e.target.value)}
+                      onChange={(e) => handleMobileChange(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (
+                          !/[0-9]/.test(e.key) &&
+                          !['Backspace', 'Tab', 'Enter', 'ArrowLeft', 'ArrowRight', 'Delete'].includes(e.key) &&
+                          !e.ctrlKey &&
+                          !e.metaKey
+                        ) {
+                          e.preventDefault();
+                        }
+                      }}
                       required
-                      style={{ marginTop: '6px' }}
+                      style={{
+                        marginTop: '6px',
+                        borderColor: mobileWarning ? '#EF4444' : undefined,
+                      }}
                     />
+                    {mobileWarning && (
+                      <span
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          color: '#DC2626',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          marginTop: '4px',
+                        }}
+                      >
+                        <AlertCircle size={13} />
+                        <span>{mobileWarning}</span>
+                      </span>
+                    )}
                   </div>
 
                   {/* Email Address */}
@@ -373,7 +482,7 @@ export const AddEmployeeScreen: React.FC = () => {
                     <input
                       type="email"
                       className="form-input-control"
-                      placeholder="e.g. rajesh@examduty.gov.in"
+                      placeholder="e.g. rajesh@gmail.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
@@ -402,14 +511,44 @@ export const AddEmployeeScreen: React.FC = () => {
                     </label>
                     <input
                       type="text"
+                      inputMode="numeric"
+                      maxLength={12}
                       className="form-input-control"
-                      placeholder="e.g. 1234 5678 9012"
-                      maxLength={14}
+                      placeholder="e.g. 489278985583"
                       value={aadhaarNumber}
-                      onChange={(e) => setAadhaarNumber(e.target.value)}
+                      onChange={(e) => handleAadhaarChange(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (
+                          !/[0-9]/.test(e.key) &&
+                          !['Backspace', 'Tab', 'Enter', 'ArrowLeft', 'ArrowRight', 'Delete'].includes(e.key) &&
+                          !e.ctrlKey &&
+                          !e.metaKey
+                        ) {
+                          e.preventDefault();
+                        }
+                      }}
                       required
-                      style={{ marginTop: '6px' }}
+                      style={{
+                        marginTop: '6px',
+                        borderColor: aadhaarWarning ? '#EF4444' : undefined,
+                      }}
                     />
+                    {aadhaarWarning && (
+                      <span
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          color: '#DC2626',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          marginTop: '4px',
+                        }}
+                      >
+                        <AlertCircle size={13} />
+                        <span>{aadhaarWarning}</span>
+                      </span>
+                    )}
                   </div>
 
                   {/* PAN Card Number */}
@@ -695,10 +834,21 @@ export const AddEmployeeScreen: React.FC = () => {
                   <label className="mobile-input-label">STAFF / RESOURCE ID *</label>
                   <input
                     type="text"
+                    inputMode="numeric"
                     className="mobile-form-input"
                     placeholder="e.g. 597305"
                     value={resourceId}
-                    onChange={(e) => setResourceId(e.target.value)}
+                    onChange={(e) => setResourceId(e.target.value.replace(/\D/g, ''))}
+                    onKeyDown={(e) => {
+                      if (
+                        !/[0-9]/.test(e.key) &&
+                        !['Backspace', 'Tab', 'Enter', 'ArrowLeft', 'ArrowRight', 'Delete'].includes(e.key) &&
+                        !e.ctrlKey &&
+                        !e.metaKey
+                      ) {
+                        e.preventDefault();
+                      }
+                    }}
                     required
                   />
                 </div>
@@ -707,9 +857,19 @@ export const AddEmployeeScreen: React.FC = () => {
                   <input
                     type="text"
                     className="mobile-form-input"
-                    placeholder="e.g. Dr. Rajesh Sharma"
+                    placeholder="e.g. Rajesh Sharma"
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    onChange={(e) => setName(e.target.value.replace(/[^a-zA-Z\s]/g, ''))}
+                    onKeyDown={(e) => {
+                      if (
+                        !/[a-zA-Z\s]/.test(e.key) &&
+                        !['Backspace', 'Tab', 'Enter', 'ArrowLeft', 'ArrowRight', 'Delete', ' '].includes(e.key) &&
+                        !e.ctrlKey &&
+                        !e.metaKey
+                      ) {
+                        e.preventDefault();
+                      }
+                    }}
                     required
                   />
                 </div>
@@ -717,19 +877,48 @@ export const AddEmployeeScreen: React.FC = () => {
                   <label className="mobile-input-label">CONTACT / MOBILE NUMBER *</label>
                   <input
                     type="tel"
+                    inputMode="numeric"
+                    maxLength={10}
                     className="mobile-form-input"
-                    placeholder="e.g. 9845123456"
+                    placeholder="e.g. 9845281743"
                     value={mobile}
-                    onChange={(e) => setMobile(e.target.value)}
+                    onChange={(e) => handleMobileChange(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (
+                        !/[0-9]/.test(e.key) &&
+                        !['Backspace', 'Tab', 'Enter', 'ArrowLeft', 'ArrowRight', 'Delete'].includes(e.key) &&
+                        !e.ctrlKey &&
+                        !e.metaKey
+                      ) {
+                        e.preventDefault();
+                      }
+                    }}
                     required
+                    style={{ borderColor: mobileWarning ? '#EF4444' : undefined }}
                   />
+                  {mobileWarning && (
+                    <span
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        color: '#DC2626',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        marginTop: '4px',
+                      }}
+                    >
+                      <AlertCircle size={13} />
+                      <span>{mobileWarning}</span>
+                    </span>
+                  )}
                 </div>
                 <div className="mobile-form-group">
                   <label className="mobile-input-label">EMAIL ADDRESS *</label>
                   <input
                     type="email"
                     className="mobile-form-input"
-                    placeholder="e.g. rajesh@examduty.gov.in"
+                    placeholder="e.g. rajesh@gmail.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
@@ -747,13 +936,41 @@ export const AddEmployeeScreen: React.FC = () => {
                   <label className="mobile-input-label">AADHAAR CARD NUMBER *</label>
                   <input
                     type="text"
+                    inputMode="numeric"
+                    maxLength={12}
                     className="mobile-form-input"
-                    placeholder="e.g. 1234 5678 9012"
-                    maxLength={14}
+                    placeholder="e.g. 489278985583"
                     value={aadhaarNumber}
-                    onChange={(e) => setAadhaarNumber(e.target.value)}
+                    onChange={(e) => handleAadhaarChange(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (
+                        !/[0-9]/.test(e.key) &&
+                        !['Backspace', 'Tab', 'Enter', 'ArrowLeft', 'ArrowRight', 'Delete'].includes(e.key) &&
+                        !e.ctrlKey &&
+                        !e.metaKey
+                      ) {
+                        e.preventDefault();
+                      }
+                    }}
                     required
+                    style={{ borderColor: aadhaarWarning ? '#EF4444' : undefined }}
                   />
+                  {aadhaarWarning && (
+                    <span
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        color: '#DC2626',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        marginTop: '4px',
+                      }}
+                    >
+                      <AlertCircle size={13} />
+                      <span>{aadhaarWarning}</span>
+                    </span>
+                  )}
                 </div>
                 <div className="mobile-form-group">
                   <label className="mobile-input-label">PAN CARD NUMBER *</label>

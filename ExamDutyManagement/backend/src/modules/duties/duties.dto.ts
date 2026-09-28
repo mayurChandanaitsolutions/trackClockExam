@@ -59,7 +59,15 @@ export class CreateDutyDto {
 
   @IsOptional()
   @IsString()
+  employeeResourceId?: string;
+
+  @IsOptional()
+  @IsString()
   attendanceFileId?: string;
+
+  @IsOptional()
+  @IsString()
+  comments?: string;
 }
 
 export class UpdateDutyDto {

@@ -80,23 +80,23 @@ IF NOT EXISTS (SELECT 1 FROM dbo.exams WHERE name = 'National Mock Exam 2026')
 PRINT '>>> Master Exams seeded.';
 GO
 
--- 4. Insert Roles
-IF NOT EXISTS (SELECT 1 FROM dbo.roles WHERE code = 'Invigilator')
-    INSERT INTO dbo.roles (id, name, code) VALUES (NEWID(), 'Invigilator', 'Invigilator');
-
-IF NOT EXISTS (SELECT 1 FROM dbo.roles WHERE code = 'Center Observer')
-    INSERT INTO dbo.roles (id, name, code) VALUES (NEWID(), 'Center Observer', 'Center Observer');
+-- 4. Insert Roles (Matching portal: M OT, SO, HOT, CCTV, Equity Lab Supervisior_ ssc)
+IF NOT EXISTS (SELECT 1 FROM dbo.roles WHERE code = 'MOT')
+    INSERT INTO dbo.roles (id, name, code) VALUES (NEWID(), 'M OT', 'MOT');
 
 IF NOT EXISTS (SELECT 1 FROM dbo.roles WHERE code = 'SO')
-    INSERT INTO dbo.roles (id, name, code) VALUES (NEWID(), 'Station Officer', 'SO');
+    INSERT INTO dbo.roles (id, name, code) VALUES (NEWID(), 'SO', 'SO');
 
-IF NOT EXISTS (SELECT 1 FROM dbo.roles WHERE code = 'MOT')
-    INSERT INTO dbo.roles (id, name, code) VALUES (NEWID(), 'Mobile Observer Team', 'MOT');
+IF NOT EXISTS (SELECT 1 FROM dbo.roles WHERE code = 'HOT')
+    INSERT INTO dbo.roles (id, name, code) VALUES (NEWID(), 'HOT(IT Manager)', 'HOT');
 
-IF NOT EXISTS (SELECT 1 FROM dbo.roles WHERE code = 'LOT')
-    INSERT INTO dbo.roles (id, name, code) VALUES (NEWID(), 'Local Observer Team', 'LOT');
+IF NOT EXISTS (SELECT 1 FROM dbo.roles WHERE code = 'CCTV')
+    INSERT INTO dbo.roles (id, name, code) VALUES (NEWID(), 'CCTV', 'CCTV');
 
-PRINT '>>> Master Roles seeded.';
+IF NOT EXISTS (SELECT 1 FROM dbo.roles WHERE code = 'ELS_SSC')
+    INSERT INTO dbo.roles (id, name, code) VALUES (NEWID(), 'Equity Lab Supervisior_ ssc', 'ELS_SSC');
+
+PRINT '>>> Master Roles seeded (M OT, SO, HOT, CCTV, Equity Lab Supervisior_ ssc).';
 GO
 
 -- 5. Insert Shifts

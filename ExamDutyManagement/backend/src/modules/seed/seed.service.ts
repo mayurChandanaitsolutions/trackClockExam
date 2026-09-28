@@ -123,6 +123,9 @@ export class SeedService implements OnModuleInit {
         { name: 'Center Observer', code: 'Center Observer' },
         { name: 'Mobile Observer Team', code: 'MOT' },
         { name: 'Local Observer Team', code: 'LOT' },
+        { name: 'HOT(IT Manager)', code: 'HOT' },
+        { name: 'CCTV', code: 'CCTV' },
+        { name: 'Equity Lab Supervisior_ ssc', code: 'ELS_SSC' },
       ]);
     }
 

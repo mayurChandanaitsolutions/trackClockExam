@@ -24,7 +24,7 @@ export class DutiesService {
       if (existing) return existing.id;
     }
 
-    const resId = (dto.resourceId || '').trim();
+    const resId = (dto.resourceId || dto.employeeResourceId || '').trim();
     if (!resId && !dto.employeeId) {
       throw new BadRequestException('Staff / Resource ID is required to assign or add duty.');
     }

@@ -227,6 +227,12 @@ IF NOT EXISTS (SELECT 1 FROM dbo.roles WHERE code = 'MOT')
     INSERT INTO dbo.roles (id, name, code) VALUES (NEWID(), 'Mobile Observer Team', 'MOT');
 IF NOT EXISTS (SELECT 1 FROM dbo.roles WHERE code = 'LOT')
     INSERT INTO dbo.roles (id, name, code) VALUES (NEWID(), 'Local Observer Team', 'LOT');
+IF NOT EXISTS (SELECT 1 FROM dbo.roles WHERE code = 'HOT')
+    INSERT INTO dbo.roles (id, name, code) VALUES (NEWID(), 'HOT(IT Manager)', 'HOT');
+IF NOT EXISTS (SELECT 1 FROM dbo.roles WHERE code = 'CCTV')
+    INSERT INTO dbo.roles (id, name, code) VALUES (NEWID(), 'CCTV', 'CCTV');
+IF NOT EXISTS (SELECT 1 FROM dbo.roles WHERE name = 'Equity Lab Supervisior_ ssc' OR code = 'ELS_SSC')
+    INSERT INTO dbo.roles (id, name, code) VALUES (NEWID(), 'Equity Lab Supervisior_ ssc', 'ELS_SSC');
 
 -- Shifts
 IF NOT EXISTS (SELECT 1 FROM dbo.shifts WHERE name = 'Shift 1')
@@ -296,4 +302,32 @@ GO
 PRINT '========================================================================';
 PRINT '  Exam Duty Management System - Database & Seed Setup Completed!';
 PRINT '========================================================================';
+GO
+
+-- Create Human-Readable Duties View for easy querying in SSMS
+CREATE OR ALTER VIEW dbo.vw_duties AS
+SELECT 
+    e.resourceId AS [Resource ID],
+    e.name AS [Employee Name],
+    e.mobile AS [Contact Number],
+    d.dutyDate AS [Duty Date],
+    d.dutyType AS [Duty Type],
+    ex.name AS [Exam Name],
+    ex.code AS [Exam Code],
+    c.centerName AS [Exam Center],
+    c.centerCode AS [Center Code],
+    ci.name AS [City],
+    r.name AS [Duty Role],
+    s.name AS [Shift],
+    d.reportingTime AS [Reporting Time],
+    d.shiftEndTime AS [Shift End Time],
+    d.status AS [Status],
+    d.createdAt AS [Created At]
+FROM dbo.duties d
+LEFT JOIN dbo.employees e ON d.employeeId = e.id
+LEFT JOIN dbo.exams ex ON d.examId = ex.id
+LEFT JOIN dbo.centers c ON d.centerId = c.id
+LEFT JOIN dbo.cities ci ON d.cityId = ci.id
+LEFT JOIN dbo.roles r ON d.roleId = r.id
+LEFT JOIN dbo.shifts s ON d.shiftId = s.id;
 GO

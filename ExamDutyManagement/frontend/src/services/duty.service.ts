@@ -27,6 +27,7 @@ export interface DutyItem {
 export interface CreateDutyPayload {
   employeeId?: string;
   resourceId?: string;
+  employeeResourceId?: string;
   employeeName?: string;
   employeeMobile?: string;
   employeeEmail?: string;
@@ -40,6 +41,7 @@ export interface CreateDutyPayload {
   reportingTime?: string;
   shiftEndTime?: string;
   attendanceFileId?: string;
+  comments?: string;
 }
 
 export interface UpdateDutyPayload {

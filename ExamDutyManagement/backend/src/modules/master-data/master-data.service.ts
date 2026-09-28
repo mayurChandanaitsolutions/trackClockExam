@@ -50,7 +50,26 @@ export class MasterDataService {
   }
 
   async getRoles(): Promise<Role[]> {
-    return this.roleRepo.find({ order: { name: 'ASC' } });
+    let roles = await this.roleRepo.find({ order: { name: 'ASC' } });
+    const hasELS = roles.some(
+      (r) =>
+        r.name?.toLowerCase() === 'equity lab supervisior_ ssc'.toLowerCase() ||
+        r.code?.toUpperCase() === 'ELS_SSC',
+    );
+    if (!hasELS) {
+      try {
+        const newRole = await this.roleRepo.save({
+          name: 'Equity Lab Supervisior_ ssc',
+          code: 'ELS_SSC',
+        });
+        roles.push(newRole);
+        roles.sort((a, b) => a.name.localeCompare(b.name));
+      } catch {
+        // If inserted concurrently, reload
+        roles = await this.roleRepo.find({ order: { name: 'ASC' } });
+      }
+    }
+    return roles;
   }
 
   async getShifts(): Promise<Shift[]> {
@@ -105,7 +124,14 @@ export class MasterDataService {
       isIdentityVerified: dto.isIdentityVerified ?? hasIdDetails,
       status: 'Active',
     });
-    return this.employeeRepo.save(emp);
+    const savedEmp = await this.employeeRepo.save(emp);
+
+    console.log('\x1b[32m====================================================\x1b[0m');
+    console.log('\x1b[32m✔ DATABASE CONNECTED SUCCESSFULLY\x1b[0m');
+    console.log(`✔ [Employee Added] Name: ${savedEmp.name} (Resource ID: ${savedEmp.resourceId})`);
+    console.log('\x1b[32m====================================================\x1b[0m');
+
+    return savedEmp;
   }
 
   async getEmployeeByResourceId(resourceId: string): Promise<Employee & { isIdentityVerified: boolean }> {

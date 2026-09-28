@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx-js-style';
 import masterService, { EmployeeItem } from '../services/master.service';
+import { hasContinuousSequence } from '../utils/validation';
 
 interface ParsedEmployeeRow {
   resourceId: string;
@@ -69,29 +70,29 @@ export const BulkUploadEmployeeModal: React.FC<BulkUploadEmployeeModalProps> = (
     const sampleData = [
       {
         'Resource ID': String(nextId),
-        'Full Name': 'Dr. Rajesh Sharma',
+        'Full Name': 'Rajesh Sharma',
         'Mobile Number': `9845${Math.floor(100000 + Math.random() * 900000)}`,
-        'Email Address': 'rajesh@examduty.gov.in',
+        'Email Address': 'rajesh@gmail.com',
         'Assigned City': 'Mysore',
-        'Aadhaar Number': '123456789012',
+        'Aadhaar Number': '489278985583',
         'PAN Number': 'ABCDE1234F',
       },
       {
         'Resource ID': String(nextId + 1),
         'Full Name': 'Priya Sharma',
         'Mobile Number': `9845${Math.floor(100000 + Math.random() * 900000)}`,
-        'Email Address': 'priya@examduty.gov.in',
+        'Email Address': 'priya@gmail.com',
         'Assigned City': 'Bangalore',
-        'Aadhaar Number': '234567890123',
+        'Aadhaar Number': '345678981234',
         'PAN Number': 'BCDEF2345G',
       },
       {
         'Resource ID': String(nextId + 2),
         'Full Name': 'Karthik Rao',
         'Mobile Number': `9845${Math.floor(100000 + Math.random() * 900000)}`,
-        'Email Address': 'karthik@examduty.gov.in',
+        'Email Address': 'karthik@gmail.com',
         'Assigned City': 'Mangalore',
-        'Aadhaar Number': '345678901234',
+        'Aadhaar Number': '548291038472',
         'PAN Number': 'CDEFG3456H',
       },
     ];
@@ -220,6 +221,12 @@ export const BulkUploadEmployeeModal: React.FC<BulkUploadEmployeeModalProps> = (
           } else if (existingMobileSet.has(mobile.replace(/\D/g, ''))) {
             status = 'duplicate';
             validationMessage = `Mobile ${mobile} is already registered.`;
+          } else if (hasContinuousSequence(mobile, 6)) {
+            status = 'invalid';
+            validationMessage = `Mobile number contains continuous sequence like 123456.`;
+          } else if (aadhaarNumber && hasContinuousSequence(aadhaarNumber, 6)) {
+            status = 'invalid';
+            validationMessage = `Aadhaar number contains continuous sequence like 123456.`;
           }
 
           return {

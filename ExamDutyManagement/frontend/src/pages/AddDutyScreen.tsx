@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { DesktopTopNav } from '../components/DesktopTopNav';
 import { DesktopSidebar } from '../components/DesktopSidebar';
@@ -18,6 +18,7 @@ import {
   X,
   MapPin,
   Camera,
+  Upload,
   Image as ImageIcon,
   Eye,
   RotateCcw,
@@ -26,7 +27,7 @@ import {
 } from 'lucide-react';
 import masterService, { City, Center, Exam, Role, Shift, EmployeeItem } from '../services/master.service';
 import attendanceService from '../services/attendance.service';
-import dutyService from '../services/duty.service';
+import dutyService, { CreateDutyPayload } from '../services/duty.service';
 import authService from '../services/auth.service';
 import EmployeeDetailsModal from '../components/EmployeeDetailsModal';
 import { ClockTimePicker } from '../components/ClockTimePicker';
@@ -187,9 +188,13 @@ export const AddDutyScreen: React.FC = () => {
             : [
                 { id: '722C2EBD-F1B0-F111-9FC5-00F9B20AAF9C', name: 'NEET', code: 'NEET', type: 'Exam' },
                 { id: '732C2EBD-F1B0-F111-9FC5-00F9B20AAF9C', name: 'JEE Main', code: 'JEE', type: 'Exam' },
+                { id: 'C9734B2F-1D84-42DA-AC41-594DF7F58C9C', name: 'JEE Main 2026 Session 2', code: 'JEE-M-S2', type: 'Exam' },
                 { id: '742C2EBD-F1B0-F111-9FC5-00F9B20AAF9C', name: 'UGC NET', code: 'NET', type: 'Exam' },
                 { id: '752C2EBD-F1B0-F111-9FC5-00F9B20AAF9C', name: 'TCS', code: 'TCS', type: 'Exam' },
                 { id: '6AB00977-D8D9-4C23-ABF2-28B5DFEFD681', name: 'IBPS PO Mains 2026', code: 'IBPS-PO-M', type: 'Exam' },
+                { id: 'B543EADA-B695-44E4-8A77-D6230E1E6799', name: 'SSC CGL Tier 1 2026', code: 'SSC-CGL-26', type: 'Exam' },
+                { id: '3F76E647-27D4-4419-8FB8-1C0C97FFF9BF', name: 'RRB NTPC Phase 1', code: 'RRB-NTPC-01', type: 'Exam' },
+                { id: '35B927A8-09D0-4670-99DF-FF17F656DA31', name: 'UPSC NDA 2026', code: 'UPSC-NDA', type: 'Exam' },
                 { id: '762C2EBD-F1B0-F111-9FC5-00F9B20AAF9C', name: 'AIIMS Mock', code: 'AIIMS', type: 'Mock' },
                 { id: '772C2EBD-F1B0-F111-9FC5-00F9B20AAF9C', name: 'GATE Mock', code: 'GATE', type: 'Mock' },
                 { id: 'DEC0FF6B-88EC-47EC-BDE9-D74582371709', name: 'Mock Drill 2026', code: 'MOCK-DR-26', type: 'Mock' },
@@ -214,19 +219,21 @@ export const AddDutyScreen: React.FC = () => {
         setCenters(cnts);
         setExams(exs);
 
-        // Strictly restrict Duty Roles to M OT, SO, HOT(IT Manager), CCTV
+        // Strictly restrict Duty Roles to M OT, SO, HOT(IT Manager), CCTV, Equity Lab Supervisior_ ssc
         const allowedRoleDefs = [
           { name: 'M OT', code: 'MOT' },
           { name: 'SO', code: 'SO' },
           { name: 'HOT(IT Manager)', code: 'HOT' },
           { name: 'CCTV', code: 'CCTV' },
+          { name: 'Equity Lab Supervisior_ ssc', code: 'ELS_SSC' },
         ];
         const finalRoles: Role[] = allowedRoleDefs.map((def) => {
           const matched = rls.find(
             (r) =>
               r.name?.toLowerCase() === def.name.toLowerCase() ||
               r.code?.toUpperCase() === def.code ||
-              (def.code === 'MOT' && (r.code === 'MOT' || r.name?.toLowerCase().includes('mobile observer'))),
+              (def.code === 'MOT' && (r.code === 'MOT' || r.name?.toLowerCase().includes('mobile observer'))) ||
+              (def.code === 'ELS_SSC' && (r.code === 'ELS_SSC' || r.name?.toLowerCase().includes('equity lab'))),
           );
           return matched
             ? { ...matched, name: def.name, code: def.code }
@@ -313,11 +320,21 @@ export const AddDutyScreen: React.FC = () => {
     }
   }, [queryResourceId, employees]);
 
-  // When Duty Type changes (Exam vs Mock), filter and auto-select matching exam
+  // When Duty Type changes (Exam vs Mock), auto-select matching exam if available
   const handleDutyTypeChange = (type: 'Exam' | 'Mock') => {
     setSelectedDutyType(type);
     const match = exams.find((x) => String(x.type || '').toLowerCase() === type.toLowerCase());
     if (match) setSelectedExamId(match.id);
+  };
+
+  // When Exam changes from dropdown, sync duty type automatically
+  const handleExamChange = (examId: string) => {
+    setSelectedExamId(examId);
+    const chosen = exams.find((x) => String(x.id).toLowerCase() === String(examId).toLowerCase());
+    if (chosen?.type) {
+      const typeStr = String(chosen.type).toLowerCase().includes('mock') ? 'Mock' : 'Exam';
+      setSelectedDutyType(typeStr);
+    }
   };
 
   // When City changes, update available centers and auto-select first center in that city
@@ -352,15 +369,16 @@ export const AddDutyScreen: React.FC = () => {
     }
   };
 
-  // Image-Only File Handler (Upload or Camera Capture)
-  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // Live Camera / Webcam State
+  const [showCameraModal, setShowCameraModal] = useState<boolean>(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
+  // Core file processor & uploader
+  const uploadAndSetFile = async (file: File) => {
     // Strict validation: Reject PDF or non-image files
     if (!file.type.startsWith('image/')) {
       setUploadError('Only image files (JPG, JPEG, PNG, WEBP) are allowed. PDF or documents are not accepted.');
-      if (e.target) e.target.value = '';
       return;
     }
 
@@ -387,7 +405,7 @@ export const AddDutyScreen: React.FC = () => {
           size: file.size,
         });
       }
-    } catch (err: any) {
+    } catch {
       // Graceful fallback for offline / mock testing
       setUploadedFile({
         id: 'img-' + Date.now(),
@@ -396,8 +414,80 @@ export const AddDutyScreen: React.FC = () => {
       });
     } finally {
       setUploading(false);
-      if (e.target) e.target.value = '';
     }
+  };
+
+  // Image-Only File Handler from file input
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await uploadAndSetFile(file);
+    if (e.target) e.target.value = '';
+  };
+
+  // Start live webcam for direct photo capture
+  const startLiveCamera = async () => {
+    try {
+      setShowCameraModal(true);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      });
+      setCameraStream(stream);
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play().catch(() => {});
+      }
+    } catch (err) {
+      console.warn('Live webcam not available, using device camera dialog', err);
+      stopLiveCamera();
+      cameraInputRef.current?.click();
+    }
+  };
+
+  const stopLiveCamera = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach((track) => track.stop());
+      setCameraStream(null);
+    }
+    setShowCameraModal(false);
+  };
+
+  // Sync stream to video element when modal mounts
+  useEffect(() => {
+    if (showCameraModal && cameraStream && videoRef.current) {
+      videoRef.current.srcObject = cameraStream;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [showCameraModal, cameraStream]);
+
+  // Clean up camera stream on unmount
+  useEffect(() => {
+    return () => {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, [cameraStream]);
+
+  // Capture frame from webcam and upload
+  const capturePhoto = () => {
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 1280;
+    canvas.height = video.videoHeight || 720;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    stopLiveCamera();
+
+    canvas.toBlob(async (blob) => {
+      if (!blob) return;
+      const file = new File([blob], `attendance_photo_${Date.now()}.jpg`, { type: 'image/jpeg' });
+      await uploadAndSetFile(file);
+    }, 'image/jpeg', 0.92);
   };
 
   const removeUploadedImage = () => {
@@ -408,9 +498,7 @@ export const AddDutyScreen: React.FC = () => {
 
   const handleRetakeImage = () => {
     removeUploadedImage();
-    setTimeout(() => {
-      cameraInputRef.current?.click();
-    }, 50);
+    startLiveCamera();
   };
 
   // Pre-submission validation: opens confirmation dialog
@@ -471,8 +559,11 @@ export const AddDutyScreen: React.FC = () => {
       const selectedRole = roles.find((r) => r.id === selectedRoleId);
       const selectedShift = shifts.find((s) => s.id === selectedShiftId);
 
-      const payload = {
-        employeeResourceId: selectedEmployee?.resourceId || user?.resourceId,
+      const resId = selectedEmployee?.resourceId || user?.resourceId;
+      const payload: CreateDutyPayload = {
+        resourceId: resId,
+        employeeResourceId: resId,
+        employeeId: selectedEmployee?.id || user?.id,
         employeeName: selectedEmployee?.name || user?.name,
         employeeMobile: selectedEmployee?.mobile || user?.mobile,
         dutyDate,
@@ -518,10 +609,18 @@ export const AddDutyScreen: React.FC = () => {
     : centers;
   const activeCenters = filteredCenters.length > 0 ? filteredCenters : centers;
 
-  const filteredExams = exams.filter(
-    (x) => String(x.type || '').toLowerCase() === String(selectedDutyType || '').toLowerCase()
-  );
-  const activeExams = filteredExams.length > 0 ? filteredExams : exams;
+  // All exams are always available for search and selection
+  // If a duty type is selected (Exam or Mock), matching exams appear first, but ALL exams are present and searchable
+  const activeExams: Exam[] = useMemo(() => {
+    if (!selectedDutyType) return exams;
+    const matching = exams.filter(
+      (x) => String(x.type || '').toLowerCase() === String(selectedDutyType).toLowerCase()
+    );
+    const others = exams.filter(
+      (x) => String(x.type || '').toLowerCase() !== String(selectedDutyType).toLowerCase()
+    );
+    return [...matching, ...others];
+  }, [exams, selectedDutyType]);
 
   const displayShifts = shifts.filter((s) => ['Shift 1', 'Shift 2', 'Shift 3'].includes(s.name)).length > 0
     ? shifts.filter((s) => ['Shift 1', 'Shift 2', 'Shift 3'].includes(s.name))
@@ -855,28 +954,26 @@ export const AddDutyScreen: React.FC = () => {
                     />
                   </div>
 
-                  {/* 5. Exam Name (Filtered by Type of Duty: Exam vs Mock) */}
+                  {/* 5. Exam Name */}
                   <div className="form-field-wrapper">
                     <label className="field-label" style={{ fontSize: '14px', fontWeight: 700 }}>
                       <FileCheck size={15} color="#2563EB" />
-                      <span>5. Exam Name ({selectedDutyType}) *</span>
+                      <span>5. Exam Name *</span>
                     </label>
                     <SearchableSelect
                       options={activeExams.map((ex) => ({
                         value: ex.id,
                         label: `${ex.name}${ex.code ? ` (${ex.code})` : ''}`,
-                        subLabel: `Type: ${ex.type || selectedDutyType}`,
+                        subLabel: `[${ex.type || 'Exam'}]`,
                       }))}
                       value={selectedExamId}
-                      onChange={setSelectedExamId}
+                      onChange={handleExamChange}
                       placeholder={
                         loadingMaster
                           ? 'Loading exams...'
-                          : activeExams.length === 0
-                          ? `No ${selectedDutyType} exams found`
-                          : `-- Type to Search ${selectedDutyType} Exam --`
+                          : '-- Type to Search Examination / Mock Test --'
                       }
-                      searchPlaceholder="Type exam name (e.g. IBPS, SBI, Mains)..."
+                      searchPlaceholder="Type exam name or code (e.g. IBPS, NEET, JEE, AIIMS, SSC)..."
                       className="form-select-control"
                       disabled={loadingMaster || activeExams.length === 0}
                     />
@@ -965,16 +1062,31 @@ export const AddDutyScreen: React.FC = () => {
                 {/* ATTENDANCE PROOF: IMAGE ONLY + CAMERA + PREVIEW */}
                 <div
                   style={{
-                    marginTop: '24px',
-                    padding: '20px',
+                    marginTop: '28px',
+                    maxWidth: '560px',
+                    marginLeft: 'auto',
+                    marginRight: 'auto',
+                    width: '100%',
+                    padding: '22px 24px',
                     borderRadius: '12px',
-                    border: '1.5px dashed #CBD5E1',
-                    background: '#FAFAFA',
+                    border: '1.5px dashed #93C5FD',
+                    background: '#F8FAFC',
+                    textAlign: 'center',
+                    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.03)',
                   }}
                 >
                   <label
                     className="field-label"
-                    style={{ fontSize: '14.5px', fontWeight: 700, marginBottom: '10px' }}
+                    style={{
+                      fontSize: '14.5px',
+                      fontWeight: 700,
+                      marginBottom: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      color: '#1E293B',
+                    }}
                   >
                     <Camera size={18} color="#2563EB" />
                     <span>Upload Attendance Proof (Images Only: Camera / Photo) *</span>
@@ -998,14 +1110,14 @@ export const AddDutyScreen: React.FC = () => {
                   />
 
                   {uploadError && (
-                    <div className="alert-banner alert-error" style={{ marginBottom: '14px' }}>
+                    <div className="alert-banner alert-error" style={{ marginBottom: '14px', textAlign: 'left' }}>
                       <AlertCircle size={16} />
                       <span>{uploadError}</span>
                     </div>
                   )}
 
                   {uploading ? (
-                    <div style={{ textAlign: 'center', padding: '24px' }}>
+                    <div style={{ textAlign: 'center', padding: '20px' }}>
                       <Loader2 size={32} className="animate-spin text-blue" style={{ margin: '0 auto 8px' }} />
                       <div style={{ fontSize: '14.5px', fontWeight: 600, color: '#1E293B' }}>
                         Uploading attendance image...
@@ -1024,6 +1136,7 @@ export const AddDutyScreen: React.FC = () => {
                         justifyContent: 'space-between',
                         flexWrap: 'wrap',
                         gap: '14px',
+                        textAlign: 'left',
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
@@ -1034,8 +1147,8 @@ export const AddDutyScreen: React.FC = () => {
                             onClick={() => setShowFullPreview(true)}
                             title="Click to zoom preview"
                             style={{
-                              width: '64px',
-                              height: '64px',
+                              width: '60px',
+                              height: '60px',
                               objectFit: 'cover',
                               borderRadius: '8px',
                               border: '1px solid #CBD5E1',
@@ -1045,8 +1158,8 @@ export const AddDutyScreen: React.FC = () => {
                         ) : (
                           <div
                             style={{
-                              width: '64px',
-                              height: '64px',
+                              width: '60px',
+                              height: '60px',
                               borderRadius: '8px',
                               background: '#DCFCE7',
                               display: 'flex',
@@ -1062,7 +1175,7 @@ export const AddDutyScreen: React.FC = () => {
                           <div style={{ fontWeight: 700, fontSize: '14.5px', color: '#1E293B' }}>
                             {uploadedFile.name}
                           </div>
-                          <div style={{ fontSize: '13px', color: '#16A34A', fontWeight: 600 }}>
+                          <div style={{ fontSize: '13px', color: '#16A34A', fontWeight: 600, marginTop: '2px' }}>
                             {(uploadedFile.size / 1024).toFixed(1)} KB &bull; Image Ready for Submission
                           </div>
                         </div>
@@ -1093,8 +1206,8 @@ export const AddDutyScreen: React.FC = () => {
                         )}
                         <button
                           type="button"
-                          onClick={handleRetakeImage}
-                          title="Click to retake attendance photo"
+                          onClick={startLiveCamera}
+                          title="Open camera to take new photo"
                           style={{
                             display: 'inline-flex',
                             alignItems: 'center',
@@ -1110,41 +1223,89 @@ export const AddDutyScreen: React.FC = () => {
                             transition: 'all 0.15s ease',
                           }}
                         >
-                          <RotateCcw size={14} />
-                          <span>Retake</span>
+                          <Camera size={14} />
+                          <span>Camera</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          title="Choose image file from computer"
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '7px 14px',
+                            background: '#F8FAFC',
+                            border: '1px solid #CBD5E1',
+                            color: '#475569',
+                            borderRadius: '6px',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease',
+                          }}
+                        >
+                          <Upload size={14} />
+                          <span>Upload File</span>
                         </button>
                       </div>
                     </div>
                   ) : (
-                    /* Initial Upload Button: Single Camera / Photo Capture */
-                    <div style={{ textAlign: 'center', padding: '16px' }}>
-                      <p style={{ margin: '0 0 14px 0', fontSize: '15px', color: '#DC2626', fontWeight: 700 }}>
+                    /* Initial Upload Buttons: Camera Capture + File Upload */
+                    <div style={{ textAlign: 'center', padding: '10px 0' }}>
+                      <p style={{ margin: '0 0 14px 0', fontSize: '14.5px', color: '#DC2626', fontWeight: 600 }}>
                         Please upload clear image of the attendance sheet
                       </p>
-                      <div style={{ display: 'flex', justifyContent: 'center' }}>
+                      <div style={{ display: 'flex', justifyContent: 'center', gap: '14px', flexWrap: 'wrap' }}>
+                        {/* Option 1: Live Camera Capture */}
                         <button
                           type="button"
-                          onClick={() => cameraInputRef.current?.click()}
+                          onClick={startLiveCamera}
                           style={{
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: '8px',
-                            padding: '11px 26px',
+                            padding: '11px 24px',
                             background: '#2563EB',
                             color: '#FFFFFF',
                             borderRadius: '8px',
                             border: 'none',
                             fontWeight: 600,
-                            fontSize: '14.5px',
+                            fontSize: '14px',
                             cursor: 'pointer',
                             boxShadow: '0 2px 4px rgba(37,99,235,0.2)',
+                            transition: 'all 0.15s ease',
                           }}
                         >
                           <Camera size={18} />
                           <span>Take Photo (Camera)</span>
                         </button>
+
+                        {/* Option 2: Upload Image File from device */}
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '11px 24px',
+                            background: '#FFFFFF',
+                            color: '#1E293B',
+                            borderRadius: '8px',
+                            border: '1.5px solid #CBD5E1',
+                            fontWeight: 600,
+                            fontSize: '14px',
+                            cursor: 'pointer',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                            transition: 'all 0.15s ease',
+                          }}
+                        >
+                          <Upload size={18} color="#2563EB" />
+                          <span>Upload Photo (Files)</span>
+                        </button>
                       </div>
-                      <span style={{ display: 'block', marginTop: '10px', fontSize: '12.5px', color: '#94A3B8' }}>
+                      <span style={{ display: 'block', marginTop: '12px', fontSize: '12.5px', color: '#64748B' }}>
                         Supports JPG, PNG, WEBP only (PDF/documents are strictly disabled)
                       </span>
                     </div>
@@ -1356,17 +1517,17 @@ export const AddDutyScreen: React.FC = () => {
 
                 {/* 5. Exam Name */}
                 <div className="mobile-form-group">
-                  <label className="mobile-input-label">5. EXAM NAME ({selectedDutyType}) *</label>
+                  <label className="mobile-input-label">5. EXAM NAME *</label>
                   <SearchableSelect
                     options={activeExams.map((ex) => ({
                       value: ex.id,
                       label: `${ex.name}${ex.code ? ` (${ex.code})` : ''}`,
-                      subLabel: `Type: ${ex.type || selectedDutyType}`,
+                      subLabel: `[${ex.type || 'Exam'}]`,
                     }))}
                     value={selectedExamId}
-                    onChange={setSelectedExamId}
-                    placeholder={`-- Type to Search ${selectedDutyType} Exam --`}
-                    searchPlaceholder="Type exam name..."
+                    onChange={handleExamChange}
+                    placeholder="-- Type to Search Exam Name or Code --"
+                    searchPlaceholder="Type exam name or code..."
                     className="mobile-form-select"
                     disabled={activeExams.length === 0}
                   />
@@ -1445,14 +1606,14 @@ export const AddDutyScreen: React.FC = () => {
                   </label>
 
                   {uploadedFile ? (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         {previewUrl && (
                           <img
                             src={previewUrl}
                             alt="Thumb"
                             onClick={() => setShowFullPreview(true)}
-                            style={{ width: '42px', height: '42px', objectFit: 'cover', borderRadius: '6px' }}
+                            style={{ width: '42px', height: '42px', objectFit: 'cover', borderRadius: '6px', cursor: 'pointer' }}
                           />
                         )}
                         <div>
@@ -1465,49 +1626,83 @@ export const AddDutyScreen: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => setShowFullPreview(true)}
-                            style={{ padding: '4px 8px', fontSize: '12px', background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '4px', fontWeight: 600 }}
+                            style={{ padding: '5px 8px', fontSize: '12px', background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '5px', fontWeight: 600 }}
                           >
                             Preview
                           </button>
                         )}
                         <button
                           type="button"
-                          onClick={handleRetakeImage}
-                          style={{ padding: '4px 8px', fontSize: '12px', background: '#EFF6FF', color: '#2563EB', border: '1px solid #BFDBFE', borderRadius: '4px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                          onClick={startLiveCamera}
+                          style={{ padding: '5px 8px', fontSize: '12px', background: '#EFF6FF', color: '#2563EB', border: '1px solid #BFDBFE', borderRadius: '5px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px' }}
                         >
-                          <RotateCcw size={12} />
-                          <span>Retake</span>
+                          <Camera size={12} />
+                          <span>Camera</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          style={{ padding: '5px 8px', fontSize: '12px', background: '#FFFFFF', color: '#475569', border: '1px solid #CBD5E1', borderRadius: '5px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                        >
+                          <Upload size={12} />
+                          <span>File</span>
                         </button>
                       </div>
                     </div>
                   ) : (
                     <div>
-                      <p style={{ margin: '0 0 10px 0', fontSize: '13.5px', color: '#DC2626', fontWeight: 700, textAlign: 'center' }}>
+                      <p style={{ margin: '0 0 10px 0', fontSize: '13px', color: '#DC2626', fontWeight: 700, textAlign: 'center' }}>
                         Please upload clear image of the attendance sheet
                       </p>
-                      <div style={{ display: 'flex', justifyContent: 'center' }}>
+                      <div style={{ display: 'flex', gap: '8px' }}>
                         <button
                           type="button"
-                          onClick={() => cameraInputRef.current?.click()}
+                          onClick={startLiveCamera}
                           style={{
-                            width: '100%',
-                            padding: '10px 16px',
+                            flex: 1,
+                            padding: '10px 10px',
                             background: '#2563EB',
                             color: '#FFFFFF',
                             border: 'none',
                             borderRadius: '6px',
-                            fontSize: '14px',
+                            fontSize: '13px',
                             fontWeight: 600,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            gap: '8px',
+                            gap: '6px',
+                            cursor: 'pointer',
                           }}
                         >
-                          <Camera size={18} />
-                          <span>Take Photo (Camera)</span>
+                          <Camera size={16} />
+                          <span>Take Photo</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          style={{
+                            flex: 1,
+                            padding: '10px 10px',
+                            background: '#FFFFFF',
+                            color: '#1E293B',
+                            border: '1.5px solid #CBD5E1',
+                            borderRadius: '6px',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <Upload size={16} color="#2563EB" />
+                          <span>Upload File</span>
                         </button>
                       </div>
+                      <span style={{ display: 'block', marginTop: '8px', fontSize: '11.5px', color: '#64748B', textAlign: 'center' }}>
+                        JPG, PNG, WEBP only (Documents/PDFs disabled)
+                      </span>
                     </div>
                   )}
                 </div>
@@ -1658,6 +1853,221 @@ export const AddDutyScreen: React.FC = () => {
               >
                 <CheckCircle2 size={16} />
                 <span>Yes, Submit</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Live Camera Viewfinder Modal */}
+      {showCameraModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.85)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 100050,
+            padding: '16px',
+          }}
+          onClick={stopLiveCamera}
+        >
+          <div
+            style={{
+              background: '#0F172A',
+              color: '#FFFFFF',
+              borderRadius: '16px',
+              maxWidth: '640px',
+              width: '100%',
+              overflow: 'hidden',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)',
+              border: '1px solid #334155',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '16px 20px',
+                borderBottom: '1px solid #1E293B',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div
+                  style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '8px',
+                    background: 'rgba(37, 99, 235, 0.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#60A5FA',
+                  }}
+                >
+                  <Camera size={20} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#F8FAFC' }}>
+                    Take Attendance Photo
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '12px', color: '#94A3B8' }}>
+                    Align the attendance sheet clearly within the camera frame
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={stopLiveCamera}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#94A3B8',
+                  cursor: 'pointer',
+                  padding: '6px',
+                  borderRadius: '6px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Video Viewfinder */}
+            <div
+              style={{
+                position: 'relative',
+                background: '#020617',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minHeight: '320px',
+                maxHeight: '60vh',
+                overflow: 'hidden',
+              }}
+            >
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  maxHeight: '60vh',
+                  objectFit: 'contain',
+                }}
+              />
+
+              {/* Viewfinder Overlay Guides */}
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: '24px',
+                  border: '2px dashed rgba(255, 255, 255, 0.4)',
+                  borderRadius: '12px',
+                  pointerEvents: 'none',
+                  boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.2)',
+                }}
+              />
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '32px',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  background: 'rgba(0,0,0,0.6)',
+                  color: '#F8FAFC',
+                  fontSize: '12px',
+                  padding: '4px 12px',
+                  borderRadius: '20px',
+                  pointerEvents: 'none',
+                }}
+              >
+                Point camera at attendance sheet
+              </div>
+            </div>
+
+            {/* Controls / Actions */}
+            <div
+              style={{
+                padding: '16px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '12px',
+                background: '#0F172A',
+                borderTop: '1px solid #1E293B',
+              }}
+            >
+              <button
+                type="button"
+                onClick={stopLiveCamera}
+                style={{
+                  padding: '10px 18px',
+                  background: '#1E293B',
+                  border: '1px solid #334155',
+                  borderRadius: '8px',
+                  color: '#CBD5E1',
+                  fontWeight: 600,
+                  fontSize: '13.5px',
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={capturePhoto}
+                style={{
+                  padding: '12px 28px',
+                  background: '#2563EB',
+                  border: 'none',
+                  borderRadius: '8px',
+                  color: '#FFFFFF',
+                  fontWeight: 700,
+                  fontSize: '14.5px',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  boxShadow: '0 4px 14px rgba(37, 99, 235, 0.4)',
+                }}
+              >
+                <Camera size={18} />
+                <span>Capture Photo</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  stopLiveCamera();
+                  cameraInputRef.current?.click();
+                }}
+                style={{
+                  padding: '10px 14px',
+                  background: 'transparent',
+                  border: '1px solid #334155',
+                  borderRadius: '8px',
+                  color: '#94A3B8',
+                  fontWeight: 500,
+                  fontSize: '12.5px',
+                  cursor: 'pointer',
+                }}
+                title="If webcam doesn't open properly, choose device camera or file"
+              >
+                Device Camera
               </button>
             </div>
           </div>

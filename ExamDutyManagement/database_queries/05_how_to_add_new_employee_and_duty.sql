@@ -79,23 +79,53 @@ END
 GO
 
 -- =================================================================================
--- 3. CHECK THE NEW EMPLOYEE AND THEIR DUTIES
+-- 3. CHECK THE NEW EMPLOYEE AND THEIR DUTIES (WITH FULL NAMES & DETAILS)
 -- =================================================================================
+-- View specific employee by Resource ID:
 SELECT 
-    e.resourceId,
+    e.resourceId AS [Resource ID],
     e.name AS [Employee Name],
-    e.mobile,
-    d.dutyDate AS [Date],
-    c.centerName AS [Center],
-    ex.name AS [Exam],
-    r.code AS [Role],
+    e.mobile AS [Contact Number],
+    d.dutyDate AS [Duty Date],
+    d.dutyType AS [Duty Type],
+    ex.name AS [Exam Name],
+    c.centerName AS [Exam Center],
+    c.centerCode AS [Center Code],
+    ci.name AS [City],
+    r.name AS [Role],
     s.name AS [Shift],
     d.status AS [Status]
 FROM dbo.employees e
 LEFT JOIN dbo.duties d ON e.id = d.employeeId
-LEFT JOIN dbo.centers c ON d.centerId = c.id
 LEFT JOIN dbo.exams ex ON d.examId = ex.id
+LEFT JOIN dbo.centers c ON d.centerId = c.id
+LEFT JOIN dbo.cities ci ON d.cityId = ci.id
 LEFT JOIN dbo.roles r ON d.roleId = r.id
 LEFT JOIN dbo.shifts s ON d.shiftId = s.id
 WHERE e.resourceId = '18999';
+GO
+
+-- Or view ALL duties for all employees with human-readable names:
+SELECT 
+    e.resourceId AS [Resource ID],
+    e.name AS [Employee Name],
+    e.mobile AS [Contact Number],
+    d.dutyDate AS [Duty Date],
+    d.dutyType AS [Duty Type],
+    ex.name AS [Exam Name],
+    c.centerName AS [Exam Center],
+    ci.name AS [City],
+    r.name AS [Duty Role],
+    s.name AS [Shift],
+    d.reportingTime AS [Reporting Time],
+    d.shiftEndTime AS [Shift End Time],
+    d.status AS [Status]
+FROM dbo.duties d
+LEFT JOIN dbo.employees e ON d.employeeId = e.id
+LEFT JOIN dbo.exams ex ON d.examId = ex.id
+LEFT JOIN dbo.centers c ON d.centerId = c.id
+LEFT JOIN dbo.cities ci ON d.cityId = ci.id
+LEFT JOIN dbo.roles r ON d.roleId = r.id
+LEFT JOIN dbo.shifts s ON d.shiftId = s.id
+ORDER BY d.createdAt DESC;
 GO

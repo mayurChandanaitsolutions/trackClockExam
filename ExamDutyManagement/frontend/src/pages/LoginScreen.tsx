@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Shield, User, Phone, ArrowRight, AlertCircle, Loader2, ShieldCheck } from 'lucide-react';
 import authService from '../services/auth.service';
+import { hasContinuousSequence } from '../utils/validation';
 
 export const LoginScreen: React.FC = () => {
   const navigate = useNavigate();
@@ -13,11 +14,31 @@ export const LoginScreen: React.FC = () => {
   const [errors, setErrors] = useState<{ resourceId?: string; mobile?: string; server?: string }>({});
   const [loading, setLoading] = useState<boolean>(false);
 
+  const handleResourceIdChange = (val: string) => {
+    const digits = val.replace(/\D/g, '');
+    if (hasContinuousSequence(digits, 5)) {
+      setErrors((prev) => ({
+        ...prev,
+        resourceId: 'Continuous numbers like 12345 are not allowed.',
+        server: undefined,
+      }));
+      return;
+    }
+    setResourceId(digits);
+    if (errors.resourceId || errors.server) {
+      setErrors((prev) => ({ ...prev, resourceId: undefined, server: undefined }));
+    }
+  };
+
   const validate = (): boolean => {
     const newErrors: { resourceId?: string; mobile?: string } = {};
 
     if (!resourceId.trim()) {
       newErrors.resourceId = 'Resource ID is required';
+    } else if (!/^\d+$/.test(resourceId.trim())) {
+      newErrors.resourceId = 'Resource ID must contain numbers only';
+    } else if (hasContinuousSequence(resourceId.trim(), 5)) {
+      newErrors.resourceId = 'Continuous numbers like 12345 are not allowed';
     }
 
     if (!mobile.trim()) {
@@ -138,6 +159,58 @@ export const LoginScreen: React.FC = () => {
             </h2>
           </div>
 
+          {loginRole === 'admin' && (
+            <div
+              style={{
+                background: '#F0FDF4',
+                border: '1px solid #BBF7D0',
+                borderRadius: '8px',
+                padding: '10px 14px',
+                marginBottom: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '10px',
+                fontSize: '13.5px',
+                color: '#166534',
+              }}
+            >
+              <div>
+                <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <ShieldCheck size={16} color="#16A34A" />
+                  <span>Admin Credentials:</span>
+                </div>
+                <div style={{ marginTop: '3px', color: '#15803D' }}>
+                  <span>Resource ID: <strong>17655</strong></span>
+                  <span style={{ margin: '0 8px' }}>•</span>
+                  <span>Mobile: <strong>9876543210</strong></span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setResourceId('17655');
+                  setMobile('9876543210');
+                  setErrors({});
+                }}
+                style={{
+                  background: '#16A34A',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: '6px',
+                  padding: '6px 12px',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                }}
+              >
+                Auto Fill
+              </button>
+            </div>
+          )}
+
           {errors.server && (
             <div style={{
               background: '#FEE2E2',
@@ -167,14 +240,20 @@ export const LoginScreen: React.FC = () => {
                 <input
                   id="resourceId"
                   type="text"
+                  inputMode="numeric"
                   className="clean-input"
                   placeholder="Enter Resource ID"
                   value={resourceId}
                   disabled={loading}
-                  onChange={(e) => {
-                    setResourceId(e.target.value);
-                    if (errors.resourceId || errors.server) {
-                      setErrors((prev) => ({ ...prev, resourceId: undefined, server: undefined }));
+                  onChange={(e) => handleResourceIdChange(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (
+                      !/[0-9]/.test(e.key) &&
+                      !['Backspace', 'Tab', 'Enter', 'ArrowLeft', 'ArrowRight', 'Delete'].includes(e.key) &&
+                      !e.ctrlKey &&
+                      !e.metaKey
+                    ) {
+                      e.preventDefault();
                     }
                   }}
                 />
@@ -197,6 +276,7 @@ export const LoginScreen: React.FC = () => {
                 <input
                   id="mobile"
                   type="tel"
+                  inputMode="numeric"
                   maxLength={10}
                   className="clean-input"
                   placeholder="Enter 10-digit Mobile Number"
@@ -207,6 +287,16 @@ export const LoginScreen: React.FC = () => {
                     setMobile(clean);
                     if (errors.mobile || errors.server) {
                       setErrors((prev) => ({ ...prev, mobile: undefined, server: undefined }));
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (
+                      !/[0-9]/.test(e.key) &&
+                      !['Backspace', 'Tab', 'Enter', 'ArrowLeft', 'ArrowRight', 'Delete'].includes(e.key) &&
+                      !e.ctrlKey &&
+                      !e.metaKey
+                    ) {
+                      e.preventDefault();
                     }
                   }}
                 />

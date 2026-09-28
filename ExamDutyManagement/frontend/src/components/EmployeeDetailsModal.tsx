@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { CityMultiSelectDropdown } from './CityMultiSelectDropdown';
 import masterService, { EmployeeItem } from '../services/master.service';
+import { hasContinuousSequence } from '../utils/validation';
 
 interface EmployeeDetailsModalProps {
   resourceId: string | null;
@@ -47,6 +48,30 @@ export const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
   const [saving, setSaving] = useState<boolean>(false);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
 
+  // Real-time inline warnings for continuous sequences
+  const [editMobileWarning, setEditMobileWarning] = useState<string | null>(null);
+  const [editAadhaarWarning, setEditAadhaarWarning] = useState<string | null>(null);
+
+  const handleEditMobileChange = (val: string) => {
+    const digits = val.replace(/\D/g, '').slice(0, 10);
+    if (hasContinuousSequence(digits, 6)) {
+      setEditMobileWarning('Continuous numbers like 123456 are not allowed.');
+      return;
+    }
+    setEditMobileWarning(null);
+    setEditMobile(digits);
+  };
+
+  const handleEditAadhaarChange = (val: string) => {
+    const digits = val.replace(/\D/g, '').slice(0, 12);
+    if (hasContinuousSequence(digits, 6)) {
+      setEditAadhaarWarning('Continuous numbers like 123456 are not allowed.');
+      return;
+    }
+    setEditAadhaarWarning(null);
+    setEditAadhaar(digits);
+  };
+
   useEffect(() => {
     if (!isOpen || !resourceId) return;
 
@@ -54,6 +79,8 @@ export const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
     setLoading(true);
     setError(null);
     setSaveSuccess(null);
+    setEditMobileWarning(null);
+    setEditAadhaarWarning(null);
     setIsEditing(false);
 
     masterService
@@ -94,16 +121,41 @@ export const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
       setError('Member Full Name is mandatory.');
       return;
     }
+    if (!/^[a-zA-Z\s]+$/.test(editName.trim())) {
+      setError('Member Full Name can only contain letters and spaces (no digits or symbols).');
+      return;
+    }
     if (!editMobile.trim()) {
       setError('Contact / Mobile Number is mandatory.');
+      return;
+    }
+    if (!/^\d{10}$/.test(editMobile.trim())) {
+      setError('Contact / Mobile Number must be exactly 10 digits (numbers only, no letters or symbols).');
+      return;
+    }
+    if (hasContinuousSequence(editMobile.trim(), 6)) {
+      setError('Contact / Mobile Number cannot contain continuous sequential numbers like 123456.');
       return;
     }
     if (!editEmail.trim()) {
       setError('Email Address is mandatory.');
       return;
     }
+    const emailLower = editEmail.trim().toLowerCase();
+    if (!emailLower.endsWith('@gmail.com') || !/^[a-zA-Z0-9._%+-]+@gmail\.com$/.test(emailLower)) {
+      setError('Email Address must be a valid Gmail address ending with @gmail.com (e.g. user@gmail.com).');
+      return;
+    }
     if (!editAadhaar.trim()) {
       setError('Aadhaar Card Number is mandatory.');
+      return;
+    }
+    if (!/^\d{12}$/.test(editAadhaar.trim())) {
+      setError('Aadhaar Card Number must be exactly 12 digits (numbers only, no letters or symbols).');
+      return;
+    }
+    if (hasContinuousSequence(editAadhaar.trim(), 6)) {
+      setError('Aadhaar Card Number cannot contain continuous sequential numbers like 123456.');
       return;
     }
     if (!editPan.trim()) {
@@ -330,9 +382,19 @@ export const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
                 <input
                   type="text"
                   className="form-input-control"
-                  placeholder="Full Name"
+                  placeholder="e.g. Rajesh Sharma"
                   value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
+                  onChange={(e) => setEditName(e.target.value.replace(/[^a-zA-Z\s]/g, ''))}
+                  onKeyDown={(e) => {
+                    if (
+                      !/[a-zA-Z\s]/.test(e.key) &&
+                      !['Backspace', 'Tab', 'Enter', 'ArrowLeft', 'ArrowRight', 'Delete', ' '].includes(e.key) &&
+                      !e.ctrlKey &&
+                      !e.metaKey
+                    ) {
+                      e.preventDefault();
+                    }
+                  }}
                   required
                   style={{ marginTop: '4px', fontSize: '15.5px' }}
                 />
@@ -345,13 +407,45 @@ export const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
                 </label>
                 <input
                   type="tel"
+                  inputMode="numeric"
+                  maxLength={10}
                   className="form-input-control"
-                  placeholder="Mobile Number"
+                  placeholder="e.g. 9845281743"
                   value={editMobile}
-                  onChange={(e) => setEditMobile(e.target.value)}
+                  onChange={(e) => handleEditMobileChange(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (
+                      !/[0-9]/.test(e.key) &&
+                      !['Backspace', 'Tab', 'Enter', 'ArrowLeft', 'ArrowRight', 'Delete'].includes(e.key) &&
+                      !e.ctrlKey &&
+                      !e.metaKey
+                    ) {
+                      e.preventDefault();
+                    }
+                  }}
                   required
-                  style={{ marginTop: '4px', fontSize: '15.5px' }}
+                  style={{
+                    marginTop: '4px',
+                    fontSize: '15.5px',
+                    borderColor: editMobileWarning ? '#EF4444' : undefined,
+                  }}
                 />
+                {editMobileWarning && (
+                  <span
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      color: '#DC2626',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      marginTop: '4px',
+                    }}
+                  >
+                    <AlertCircle size={13} />
+                    <span>{editMobileWarning}</span>
+                  </span>
+                )}
               </div>
 
               <div>
@@ -362,7 +456,7 @@ export const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
                 <input
                   type="email"
                   className="form-input-control"
-                  placeholder="Email Address"
+                  placeholder="e.g. rajesh@gmail.com"
                   value={editEmail}
                   onChange={(e) => setEditEmail(e.target.value)}
                   required
@@ -377,14 +471,45 @@ export const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
                 </label>
                 <input
                   type="text"
+                  inputMode="numeric"
+                  maxLength={12}
                   className="form-input-control"
-                  placeholder="e.g. 1234 5678 9012"
-                  maxLength={14}
+                  placeholder="e.g. 489278985583"
                   value={editAadhaar}
-                  onChange={(e) => setEditAadhaar(e.target.value)}
+                  onChange={(e) => handleEditAadhaarChange(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (
+                      !/[0-9]/.test(e.key) &&
+                      !['Backspace', 'Tab', 'Enter', 'ArrowLeft', 'ArrowRight', 'Delete'].includes(e.key) &&
+                      !e.ctrlKey &&
+                      !e.metaKey
+                    ) {
+                      e.preventDefault();
+                    }
+                  }}
                   required
-                  style={{ marginTop: '4px', fontSize: '15.5px' }}
+                  style={{
+                    marginTop: '4px',
+                    fontSize: '15.5px',
+                    borderColor: editAadhaarWarning ? '#EF4444' : undefined,
+                  }}
                 />
+                {editAadhaarWarning && (
+                  <span
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      color: '#DC2626',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      marginTop: '4px',
+                    }}
+                  >
+                    <AlertCircle size={13} />
+                    <span>{editAadhaarWarning}</span>
+                  </span>
+                )}
               </div>
 
               <div>

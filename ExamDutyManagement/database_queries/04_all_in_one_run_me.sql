@@ -202,31 +202,43 @@ IF NOT EXISTS (SELECT 1 FROM dbo.centers WHERE centerCode = '7701')
     INSERT INTO dbo.centers (id, centerCode, centerName, cityId, address)
     VALUES (NEWID(), '7701', 'PES University Campus Center', @CityBengaluru, '100 Feet Ring Road, BSK 3rd Stage');
 
--- Exams
+-- Exams (All 12 Exams & Mocks)
+IF NOT EXISTS (SELECT 1 FROM dbo.exams WHERE name = 'NEET')
+    INSERT INTO dbo.exams (id, name, code, type) VALUES (NEWID(), 'NEET', 'NEET', 'Exam');
+IF NOT EXISTS (SELECT 1 FROM dbo.exams WHERE name = 'JEE Main')
+    INSERT INTO dbo.exams (id, name, code, type) VALUES (NEWID(), 'JEE Main', 'JEE', 'Exam');
+IF NOT EXISTS (SELECT 1 FROM dbo.exams WHERE name = 'JEE Main 2026 Session 2')
+    INSERT INTO dbo.exams (id, name, code, type) VALUES (NEWID(), 'JEE Main 2026 Session 2', 'JEE-M-S2', 'Exam');
+IF NOT EXISTS (SELECT 1 FROM dbo.exams WHERE name = 'UGC NET')
+    INSERT INTO dbo.exams (id, name, code, type) VALUES (NEWID(), 'UGC NET', 'NET', 'Exam');
+IF NOT EXISTS (SELECT 1 FROM dbo.exams WHERE name = 'TCS')
+    INSERT INTO dbo.exams (id, name, code, type) VALUES (NEWID(), 'TCS', 'TCS', 'Exam');
+IF NOT EXISTS (SELECT 1 FROM dbo.exams WHERE name = 'IBPS PO Mains 2026')
+    INSERT INTO dbo.exams (id, name, code, type) VALUES (NEWID(), 'IBPS PO Mains 2026', 'IBPS-PO-M', 'Exam');
 IF NOT EXISTS (SELECT 1 FROM dbo.exams WHERE name = 'SSC CGL Tier 1 2026')
     INSERT INTO dbo.exams (id, name, code, type) VALUES (NEWID(), 'SSC CGL Tier 1 2026', 'SSC-CGL-26', 'Exam');
 IF NOT EXISTS (SELECT 1 FROM dbo.exams WHERE name = 'RRB NTPC Phase 1')
     INSERT INTO dbo.exams (id, name, code, type) VALUES (NEWID(), 'RRB NTPC Phase 1', 'RRB-NTPC-01', 'Exam');
-IF NOT EXISTS (SELECT 1 FROM dbo.exams WHERE name = 'IBPS PO Mains 2026')
-    INSERT INTO dbo.exams (id, name, code, type) VALUES (NEWID(), 'IBPS PO Mains 2026', 'IBPS-PO-M', 'Exam');
 IF NOT EXISTS (SELECT 1 FROM dbo.exams WHERE name = 'UPSC NDA 2026')
     INSERT INTO dbo.exams (id, name, code, type) VALUES (NEWID(), 'UPSC NDA 2026', 'UPSC-NDA', 'Exam');
-IF NOT EXISTS (SELECT 1 FROM dbo.exams WHERE name = 'JEE Main 2026 Session 2')
-    INSERT INTO dbo.exams (id, name, code, type) VALUES (NEWID(), 'JEE Main 2026 Session 2', 'JEE-M-S2', 'Exam');
+IF NOT EXISTS (SELECT 1 FROM dbo.exams WHERE name = 'AIIMS Mock')
+    INSERT INTO dbo.exams (id, name, code, type) VALUES (NEWID(), 'AIIMS Mock', 'AIIMS', 'Mock');
+IF NOT EXISTS (SELECT 1 FROM dbo.exams WHERE name = 'GATE Mock')
+    INSERT INTO dbo.exams (id, name, code, type) VALUES (NEWID(), 'GATE Mock', 'GATE', 'Mock');
 IF NOT EXISTS (SELECT 1 FROM dbo.exams WHERE name = 'Mock Drill 2026')
     INSERT INTO dbo.exams (id, name, code, type) VALUES (NEWID(), 'Mock Drill 2026', 'MOCK-DR-26', 'Mock');
 
--- Roles
-IF NOT EXISTS (SELECT 1 FROM dbo.roles WHERE code = 'Invigilator')
-    INSERT INTO dbo.roles (id, name, code) VALUES (NEWID(), 'Invigilator', 'Invigilator');
-IF NOT EXISTS (SELECT 1 FROM dbo.roles WHERE code = 'Center Observer')
-    INSERT INTO dbo.roles (id, name, code) VALUES (NEWID(), 'Center Observer', 'Center Observer');
-IF NOT EXISTS (SELECT 1 FROM dbo.roles WHERE code = 'SO')
-    INSERT INTO dbo.roles (id, name, code) VALUES (NEWID(), 'Station Officer', 'SO');
+-- Roles (Portal Allowed Roles: M OT, SO, HOT(IT Manager), CCTV, Equity Lab Supervisior_ ssc)
 IF NOT EXISTS (SELECT 1 FROM dbo.roles WHERE code = 'MOT')
-    INSERT INTO dbo.roles (id, name, code) VALUES (NEWID(), 'Mobile Observer Team', 'MOT');
-IF NOT EXISTS (SELECT 1 FROM dbo.roles WHERE code = 'LOT')
-    INSERT INTO dbo.roles (id, name, code) VALUES (NEWID(), 'Local Observer Team', 'LOT');
+    INSERT INTO dbo.roles (id, name, code) VALUES (NEWID(), 'M OT', 'MOT');
+IF NOT EXISTS (SELECT 1 FROM dbo.roles WHERE code = 'SO')
+    INSERT INTO dbo.roles (id, name, code) VALUES (NEWID(), 'SO', 'SO');
+IF NOT EXISTS (SELECT 1 FROM dbo.roles WHERE code = 'HOT')
+    INSERT INTO dbo.roles (id, name, code) VALUES (NEWID(), 'HOT(IT Manager)', 'HOT');
+IF NOT EXISTS (SELECT 1 FROM dbo.roles WHERE code = 'CCTV')
+    INSERT INTO dbo.roles (id, name, code) VALUES (NEWID(), 'CCTV', 'CCTV');
+IF NOT EXISTS (SELECT 1 FROM dbo.roles WHERE code = 'ELS_SSC')
+    INSERT INTO dbo.roles (id, name, code) VALUES (NEWID(), 'Equity Lab Supervisior_ ssc', 'ELS_SSC');
 
 -- Shifts
 IF NOT EXISTS (SELECT 1 FROM dbo.shifts WHERE name = 'Shift 1')
@@ -312,4 +324,32 @@ UNION ALL
 SELECT 'Shifts Count', COUNT(*) FROM dbo.shifts
 UNION ALL
 SELECT 'Duties Count', COUNT(*) FROM dbo.duties;
+GO
+
+-- Create Human-Readable Duties View for easy querying in SSMS
+CREATE OR ALTER VIEW dbo.vw_duties AS
+SELECT 
+    e.resourceId AS [Resource ID],
+    e.name AS [Employee Name],
+    e.mobile AS [Contact Number],
+    d.dutyDate AS [Duty Date],
+    d.dutyType AS [Duty Type],
+    ex.name AS [Exam Name],
+    ex.code AS [Exam Code],
+    c.centerName AS [Exam Center],
+    c.centerCode AS [Center Code],
+    ci.name AS [City],
+    r.name AS [Duty Role],
+    s.name AS [Shift],
+    d.reportingTime AS [Reporting Time],
+    d.shiftEndTime AS [Shift End Time],
+    d.status AS [Status],
+    d.createdAt AS [Created At]
+FROM dbo.duties d
+LEFT JOIN dbo.employees e ON d.employeeId = e.id
+LEFT JOIN dbo.exams ex ON d.examId = ex.id
+LEFT JOIN dbo.centers c ON d.centerId = c.id
+LEFT JOIN dbo.cities ci ON d.cityId = ci.id
+LEFT JOIN dbo.roles r ON d.roleId = r.id
+LEFT JOIN dbo.shifts s ON d.shiftId = s.id;
 GO
