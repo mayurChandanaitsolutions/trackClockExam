@@ -18,18 +18,13 @@ import {
   Upload,
 } from 'lucide-react';
 import masterService, { Center, City } from '../services/master.service';
-import authService from '../services/auth.service';
+import authService, { isUserAdmin } from '../services/auth.service';
 import { BulkUploadCenterModal } from '../components/BulkUploadCenterModal';
 
 export const AddCenterScreen: React.FC = () => {
   const navigate = useNavigate();
   const user = authService.getStoredUser();
-  const isAdmin = Boolean(
-    user?.isAdmin ||
-    user?.role === 'admin' ||
-    user?.resourceId === '17655' ||
-    user?.resourceId?.toLowerCase() === 'admin'
-  );
+  const isAdmin = isUserAdmin(user);
 
   const [centers, setCenters] = useState<Center[]>([]);
   const [cities, setCities] = useState<City[]>([]);
@@ -204,6 +199,39 @@ export const AddCenterScreen: React.FC = () => {
       (c.address && c.address.toLowerCase().includes(q))
     );
   });
+
+  // Pagination State (10 items per page)
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const pageSize = 10;
+  const totalPages = Math.max(1, Math.ceil(filteredCenters.length / pageSize));
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [totalPages, currentPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, cityFilter]);
+
+  const displayedCenters = filteredCenters.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
+
+  const getPageNumbers = () => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    if (currentPage <= 4) {
+      return [1, 2, 3, 4, 5, '...', totalPages];
+    }
+    if (currentPage >= totalPages - 3) {
+      return [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    }
+    return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages];
+  };
 
   return (
     <div className="unified-dashboard-root animate-fade-in">
@@ -439,6 +467,7 @@ export const AddCenterScreen: React.FC = () => {
                   <p>Add your first examination center above</p>
                 </div>
               ) : (
+                <>
                 <table className="duties-table">
                   <thead>
                     <tr>
@@ -451,9 +480,9 @@ export const AddCenterScreen: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredCenters.map((ct, idx) => (
+                    {displayedCenters.map((ct, idx) => (
                       <tr key={ct.id}>
-                        <td style={{ textAlign: 'center', fontWeight: 600, color: '#64748B' }}>{idx + 1}</td>
+                        <td style={{ textAlign: 'center', fontWeight: 600, color: '#64748B' }}>{(currentPage - 1) * pageSize + idx + 1}</td>
                         <td>
                           <span
                             style={{
@@ -510,6 +539,59 @@ export const AddCenterScreen: React.FC = () => {
                     ))}
                   </tbody>
                 </table>
+                <div
+                  style={{
+                    padding: '14px 20px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    borderTop: '1px solid #E2E8F0',
+                    background: '#F8FAFC',
+                    flexWrap: 'wrap',
+                    gap: '12px',
+                  }}
+                >
+                  <div style={{ fontSize: '13.5px', color: '#64748B', fontWeight: 500 }}>
+                    *Showing {(currentPage - 1) * pageSize + 1} -{' '}
+                    {Math.min(currentPage * pageSize, filteredCenters.length)} of{' '}
+                    {filteredCenters.length} records ({pageSize} per page)
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <button
+                      type="button"
+                      className="trackclock-page-btn"
+                      disabled={currentPage === 1}
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      style={{ padding: '0 12px' }}
+                    >
+                      ← Back
+                    </button>
+                    {getPageNumbers().map((item, index) =>
+                      item === '...' ? (
+                        <span key={'ellipsis-' + index} className="trackclock-page-ellipsis">...</span>
+                      ) : (
+                        <button
+                          key={'page-' + item}
+                          type="button"
+                          className={'trackclock-page-btn ' + (currentPage === item ? 'active' : '')}
+                          onClick={() => setCurrentPage(Number(item))}
+                        >
+                          {item}
+                        </button>
+                      )
+                    )}
+                    <button
+                      type="button"
+                      className="trackclock-page-btn"
+                      disabled={currentPage === totalPages}
+                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                      style={{ padding: '0 12px' }}
+                    >
+                      Next →
+                    </button>
+                  </div>
+                </div>
+                </>
               )}
             </div>
           </main>
@@ -776,7 +858,7 @@ export const AddCenterScreen: React.FC = () => {
 
           <div style={{ background: '#FFFFFF', borderRadius: '10px', border: '1px solid #E2E8F0', padding: '12px' }}>
             <h3 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '8px' }}>Centers ({filteredCenters.length})</h3>
-            {filteredCenters.map((ct) => (
+            {displayedCenters.map((ct) => (
               <div key={ct.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #F1F5F9' }}>
                 <div>
                   <div style={{ fontWeight: 600, color: '#1E293B' }}>{ct.centerName}</div>
@@ -792,6 +874,32 @@ export const AddCenterScreen: React.FC = () => {
                 </div>
               </div>
             ))}
+            {filteredCenters.length > pageSize && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px', paddingTop: '10px', borderTop: '1px solid #E2E8F0', flexWrap: 'wrap', gap: '8px' }}>
+                <span style={{ fontSize: '12px', color: '#64748B' }}>
+                  {(currentPage - 1) * pageSize + 1}-{Math.min(currentPage * pageSize, filteredCenters.length)} of {filteredCenters.length}
+                </span>
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  <button
+                    type="button"
+                    className="trackclock-page-btn"
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  >
+                    ←
+                  </button>
+                  <span style={{ padding: '4px 8px', fontSize: '13px', fontWeight: 600 }}>{currentPage}/{totalPages}</span>
+                  <button
+                    type="button"
+                    className="trackclock-page-btn"
+                    disabled={currentPage === totalPages}
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  >
+                    →
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </main>
       </div>

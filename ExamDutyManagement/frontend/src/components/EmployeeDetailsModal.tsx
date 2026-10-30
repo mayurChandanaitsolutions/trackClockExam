@@ -16,6 +16,7 @@ import {
   Shield,
   MapPin,
   LogOut,
+  Trash2,
 } from 'lucide-react';
 import { CityMultiSelectDropdown } from './CityMultiSelectDropdown';
 import masterService, { EmployeeItem } from '../services/master.service';
@@ -26,6 +27,7 @@ interface EmployeeDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdated?: (updated: EmployeeItem) => void;
+  onDeleted?: (resourceId: string) => void;
 }
 
 export const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
@@ -33,6 +35,7 @@ export const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
   isOpen,
   onClose,
   onUpdated,
+  onDeleted,
 }) => {
   const [loading, setLoading] = useState<boolean>(true);
   const [employee, setEmployee] = useState<EmployeeItem | null>(null);
@@ -48,6 +51,34 @@ export const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
   const [editCities, setEditCities] = useState<string[]>(['Mysore']);
   const [saving, setSaving] = useState<boolean>(false);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+
+  const [deleting, setDeleting] = useState<boolean>(false);
+
+  const handleDelete = async () => {
+    if (!employee) return;
+    const confirmDelete = window.confirm(
+      `Are you sure you want to delete employee "${employee.name}" (Resource ID: ${employee.resourceId})? This will remove the employee from the system.`
+    );
+    if (!confirmDelete) return;
+
+    setDeleting(true);
+    try {
+      await masterService.deleteEmployee(employee.resourceId);
+      window.dispatchEvent(
+        new CustomEvent('exam_duty_master_updated', {
+          detail: { type: 'employee', action: 'delete', resourceId: employee.resourceId },
+        })
+      );
+      if (onDeleted) {
+        onDeleted(employee.resourceId);
+      }
+      onClose();
+    } catch (err: any) {
+      alert(err?.response?.data?.message || err?.message || 'Failed to delete employee.');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   // Real-time inline warnings for continuous sequences
   const [editMobileWarning, setEditMobileWarning] = useState<string | null>(null);
@@ -777,12 +808,8 @@ export const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  onClose();
-                  localStorage.removeItem('exam_duty_user');
-                  sessionStorage.clear();
-                  window.location.href = '/login';
-                }}
+                disabled={deleting}
+                onClick={handleDelete}
                 style={{
                   padding: '10px 18px',
                   fontSize: '15px',
@@ -794,11 +821,11 @@ export const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
                   border: '1.5px solid #FECACA',
                   borderRadius: '8px',
                   fontWeight: 600,
-                  cursor: 'pointer',
+                  cursor: deleting ? 'not-allowed' : 'pointer',
                 }}
               >
-                <LogOut size={16} />
-                <span>Logout</span>
+                <Trash2 size={16} />
+                <span>{deleting ? 'Deleting...' : 'Delete'}</span>
               </button>
             </div>
           </div>

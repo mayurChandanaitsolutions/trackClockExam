@@ -23,6 +23,20 @@ export interface LoginResponse {
 
 const STORAGE_KEY = 'exam_duty_user';
 
+export const isUserAdmin = (user?: EmployeeProfile | null): boolean => {
+  if (!user) return false;
+  if (user.isAdmin || user.role === 'admin') return true;
+  const resIdLower = (user.resourceId || '').toLowerCase().trim();
+  return (
+    resIdLower === 'admin' ||
+    resIdLower === 'devsupport' ||
+    resIdLower === 'mohan' ||
+    resIdLower === '5914' ||
+    resIdLower === '17655' ||
+    resIdLower.includes('admin')
+  );
+};
+
 export const authService = {
   async login(
     resourceId: string,
@@ -36,16 +50,7 @@ export const authService = {
         loginType,
       });
       if (response.data?.employee) {
-        const resIdLower = response.data.employee.resourceId?.toLowerCase();
-        const isAdmin = Boolean(
-          response.data.employee.isAdmin ||
-          response.data.employee.role === 'admin' ||
-          resIdLower === 'admin' ||
-          resIdLower === 'devsupport' ||
-          resIdLower === 'mohan' ||
-          resIdLower === '5914' ||
-          resIdLower === '17655'
-        );
+        const isAdmin = isUserAdmin(response.data.employee);
         const emp: EmployeeProfile = {
           ...response.data.employee,
           role: isAdmin ? 'admin' : 'employee',
@@ -72,8 +77,15 @@ export const authService = {
       `/auth/me?resourceId=${encodeURIComponent(idToFetch)}`
     );
     if (response.data?.employee) {
-      authService.setStoredUser(response.data.employee);
-      return response.data.employee;
+      const isAdmin = isUserAdmin(response.data.employee);
+      const emp: EmployeeProfile = {
+        ...response.data.employee,
+        role: isAdmin ? 'admin' : 'employee',
+        isAdmin,
+      };
+      authService.setStoredUser(emp);
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(emp));
+      return emp;
     }
     throw new Error('Employee not found');
   },
@@ -93,6 +105,7 @@ export const authService = {
 
   logout(): void {
     localStorage.removeItem(STORAGE_KEY);
+    sessionStorage.removeItem(STORAGE_KEY);
   },
 };
 

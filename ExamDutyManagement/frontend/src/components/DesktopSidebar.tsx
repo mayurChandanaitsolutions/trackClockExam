@@ -11,22 +11,13 @@ import {
   School,
   GraduationCap,
 } from 'lucide-react';
-import authService from '../services/auth.service';
+import authService, { isUserAdmin } from '../services/auth.service';
 
 export const DesktopSidebar: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const user = authService.getStoredUser();
-  const resIdLower = user?.resourceId?.toLowerCase() || '';
-  const isAdmin = Boolean(
-    user?.isAdmin ||
-    user?.role === 'admin' ||
-    user?.resourceId === '17655' ||
-    resIdLower === 'admin' ||
-    resIdLower === 'mohan' ||
-    resIdLower === 'devsupport' ||
-    resIdLower === '5914'
-  );
+  const isAdmin = isUserAdmin(user);
 
   const navItems = [
     {

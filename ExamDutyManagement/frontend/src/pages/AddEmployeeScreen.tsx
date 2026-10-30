@@ -29,13 +29,13 @@ import {
   Building,
 } from 'lucide-react';
 import masterService, { EmployeeItem } from '../services/master.service';
-import authService from '../services/auth.service';
+import authService, { isUserAdmin } from '../services/auth.service';
 import { hasContinuousSequence } from '../utils/validation';
 
 export const AddEmployeeScreen: React.FC = () => {
   const navigate = useNavigate();
   const user = authService.getStoredUser();
-  const isAdmin = Boolean(user?.isAdmin || user?.role === 'admin' || user?.resourceId === '17655');
+  const isAdmin = isUserAdmin(user);
 
   // Form State (All fields)
   const [resourceId, setResourceId] = useState<string>('');

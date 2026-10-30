@@ -18,7 +18,7 @@ import {
   Sparkles,
   Info,
 } from 'lucide-react';
-import authService, { EmployeeProfile } from '../services/auth.service';
+import authService, { EmployeeProfile, isUserAdmin } from '../services/auth.service';
 import masterService from '../services/master.service';
 
 export const IdentityVerificationScreen: React.FC = () => {
@@ -46,7 +46,7 @@ export const IdentityVerificationScreen: React.FC = () => {
     }
 
     // Strictly for employees only! If admin lands here, bypass directly to dashboard
-    const isAdmin = Boolean(user.isAdmin || user.role === 'admin' || user.resourceId === '17655');
+    const isAdmin = isUserAdmin(user);
     if (isAdmin) {
       navigate('/dashboard', { replace: true });
       return;

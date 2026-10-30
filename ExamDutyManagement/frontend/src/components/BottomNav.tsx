@@ -2,13 +2,13 @@ import React from 'react';
 import { LayoutDashboard, UserPlus, PlusCircle, ClipboardList, User } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import authService from '../services/auth.service';
+import authService, { isUserAdmin } from '../services/auth.service';
 
 export const BottomNav: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const user = authService.getStoredUser();
-  const isAdmin = Boolean(user?.isAdmin || user?.role === 'admin' || user?.resourceId === '17655');
+  const isAdmin = isUserAdmin(user);
 
   const navItems = [
     {
